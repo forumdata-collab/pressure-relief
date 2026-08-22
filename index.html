@@ -1015,6 +1015,10 @@ const RPPG = {
     displayBpm: null,
     snrHistory: []
 };
+// Undeclared vars here threw ReferenceError inside calcBPM on first analysis pass,
+// killing the requestAnimationFrame loop → BPM never displayed.
+let displayBpm = null;
+const bpmWindow = RPPG.bpmWindow;
 
 function _roiMean(data, w, h, ids){
     let r=0,g=0,b=0,c=0;
