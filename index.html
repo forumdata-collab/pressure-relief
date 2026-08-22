@@ -1317,7 +1317,8 @@ function toggleTimer(){
             if(timerRem <= 0){
                 clearInterval(timerInt); timerRun = false;
                 document.getElementById('timerToggle').textContent = '開始冥想';
-                playBell(); alert('🧘 冥想完成！願你內心平靜。');
+                playBell();
+                showSessionSummary();  // replaces the old plain alert + monkey-patched playBell
                 timerRem = timerDur; updateTimer();
             }
         }, 1000);
@@ -1476,9 +1477,8 @@ function toggleLang(){
 applyLang();
 
 // ==================== Session Summary on Meditation End ====================
-const _origPlayBell = playBell;
-playBell = function(){
-    _origPlayBell();
+// (merged into toggleTimer completion path — no monkey-patching)
+function showSessionSummary(){
     const s = getSessionSummary();
     if(s){
         const dir = s.delta <= -3 ? '下降' : s.delta >= 3 ? '上升' : '持平';
@@ -1486,7 +1486,7 @@ playBell = function(){
     } else {
         alert('🧘 冥想完成！願你內心平靜。');
     }
-};
+}
 </script>
 </body>
 </html>
