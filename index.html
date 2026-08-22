@@ -1165,6 +1165,15 @@ function fftPeak(sig, fs, loHz, hiHz){
         if(m>bestMag){bestMag=m;bestK=k;}
     }
     if(bestK<0 || !mags.length) return {bpm:null, snr:0};
+    // Parabolic interpolation on log-magnitude around peak → sub-bin BPM
+    // (comment always promised this; without it BPM quantizes to bin width,
+    //  e.g. ~15 BPM steps on low-fps devices → fake-looking 75/90/105/120)
+    const idx = bestK - loBin;
+    let delta = 0;
+    if(idx > 0 && idx < mags.length-1){
+        const a = Math.log(mags[idx-1]+1e-12), b = Math.log(mags[idx]+1e-12), c = Math.log(mags[idx+1]+1e-12);
+        delta = 0.5*(a-c)/(a-2*b+c || 1e-12);
+    }
     // SNR: energy at ±0.2Hz around peak vs rest of band (rPPG-Toolbox def, simplified)
     const devBins = Math.round(0.2/binHz);
     let sigP=0, noiseP=0;
@@ -1174,7 +1183,7 @@ function fftPeak(sig, fs, loHz, hiHz){
         else noiseP+=m;
     });
     const snr = 10*Math.log10((sigP+1e-9)/(noiseP+1e-9));
-    return {bpm: bestK*binHz*60, snr};
+    return {bpm: (bestK + delta)*binHz*60, snr};
 }
 
 function calcBPM(){
