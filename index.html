@@ -1211,10 +1211,11 @@ function calcBPM(){
 
     computeExtendedVitals(filt, fs);
 
-    // Median-of-5 display smoothing (unchanged — works well)
+    // Median-of-5 display smoothing
+    // ponytail: first valid reading shows immediately (window<3 gate was blocking
+    // single-shot calcBPM calls; time-based gate already ensures signal quality)
     bpmWindow.push(Math.round(bpm));
     if(bpmWindow.length > 5) bpmWindow.shift();
-    if(bpmWindow.length < 3) return;
     const sorted = [...bpmWindow].sort((a,b)=>a-b);
     const median = sorted[Math.floor(sorted.length/2)];
     if(displayBpm !== null && Math.abs(median-displayBpm) > 12 && bpmWindow.length < 5) return;
