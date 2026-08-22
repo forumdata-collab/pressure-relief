@@ -959,7 +959,7 @@ async function startCamera(){
         video.style.display = 'block';
         camCanvas.width = 240; camCanvas.height = 320;
         sigCanvas.width = 200; sigCanvas.height = 60;
-        RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = [];
+        RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.lastCalc = 0;
         frameCnt = 0;
         initFaceMesh();
         processFrame();
@@ -1067,20 +1067,28 @@ function processFrame(){
         }
     }
     frameCnt++;
-    const need = Math.ceil(RPPG.WIN_SEC * RPPG.FS * 0.8);
+    // Time-based gate: sample counts vary with real fps (FaceMesh can drop rAF to ~15fps),
+    // so require 8s of wall-clock coverage in the buffer instead of a fixed sample count.
+    const needSec = RPPG.WIN_SEC * 0.8;
+    const bufSpan = RPPG.roiBuf.length > 1
+        ? (RPPG.roiBuf[RPPG.roiBuf.length-1].t - RPPG.roiBuf[0].t) / 1000 : 0;
     // Countdown hint while sampling
     const hint = document.getElementById('bpmHint');
     if(hint){
         if(RPPG.displayBpm !== null){
             hint.textContent = '';
         } else {
-            const remaining = Math.max(0, Math.ceil(need - RPPG.roiBuf.length) / RPPG.FS);
+            const remaining = Math.max(0, needSec - bufSpan);
             hint.textContent = remaining > 0
                 ? `採樣中… 約 ${remaining.toFixed(0)} 秒後顯示心率（請保持不動）`
                 : '分析中…';
         }
     }
-    if(frameCnt % 60 === 0 && RPPG.roiBuf.length >= need) calcBPM();
+    // Recalc at most every 0.5s once we have enough coverage (frameCnt%60 stalls at low fps)
+    if(bufSpan >= needSec && performance.now() - (RPPG.lastCalc||0) > 500){
+        RPPG.lastCalc = performance.now();
+        calcBPM();
+    }
     drawSig();
     requestAnimationFrame(processFrame);
 }
