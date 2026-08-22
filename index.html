@@ -1114,6 +1114,11 @@ function bandpass(sig, fs, lo, hi){
 }
 
 // Hann-windowed FFT peak with parabolic interpolation for sub-bin precision
+function hanning(n){
+    const w = new Float64Array(n);
+    for(let i=0;i<n;i++) w[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(n-1));
+    return w;
+}
 function fftPeak(sig, fs, loHz, hiHz){
     let N = 1; while(N < sig.length) N <<= 1;
     const seg = new Float64Array(N);
