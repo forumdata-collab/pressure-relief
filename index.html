@@ -662,18 +662,30 @@
         document.getElementById('breathStatus').textContent = '已停止';
     }
 
-    // ==================== 鏡頭心跳偵測 (rPPG) ====================
+    // ==================== 鏡頭心跳偵測 (rPPG POS Method) ====================
+    // Reference: hschn58/rPPG — POS pulse extraction adapted for browser JS
     let video = document.getElementById('videoElement');
     let canvas = document.getElementById('cameraCanvas');
-    let ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d', { willReadFrequently: true });
     let signalCanvas = document.getElementById('signalGraph');
     let signalCtx = signalCanvas.getContext('2d');
     let cameraRunning = false;
     let stream = null;
-    let signalBuffer = [];
+    
+    // rPPG signal buffers (RGB channels for POS method)
+    const MAX_BUFFER = 300; // ~10s @ 30fps
+    let rBuffer = [];
+    let gBuffer = [];
+    let bBuffer = [];
+    let posSignal = []; // filtered pulse signal for display
     let frameCount = 0;
-    let lastPeakTime = 0;
-    let peakTimes = [];
+    let lastBpm = null;
+    let bpmHistory = []; // rolling window for smoothing
+    
+    // POS algorithm constants
+    const WIN_LEN_SEC = 1.6;
+    const BAND_LOW = 0.7;  // Hz (~42 BPM)
+    const BAND_HIGH = 4.0; // Hz (~240 BPM)
 
     async function toggleCamera() {
         if (cameraRunning) {
@@ -686,7 +698,7 @@
     async function startCamera() {
         try {
             stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user', width: 320, height: 240 } 
+                video: { facingMode: 'user', width: 320, height: 240, frameRate: { ideal: 30 } } 
             });
             video.srcObject = stream;
             await video.play();
@@ -703,8 +715,10 @@
             signalCanvas.width = 300;
             signalCanvas.height = 80;
 
-            signalBuffer = [];
-            peakTimes = [];
+            rBuffer = []; gBuffer = []; bBuffer = []; posSignal = [];
+            bpmHistory = [];
+            frameCount = 0;
+            lastBpm = null;
             processFrame();
         } catch (err) {
             alert('無法存取攝像頭：' + err.message);
@@ -723,73 +737,204 @@
         video.style.display = 'none';
     }
 
+    function extractFaceROI(data, w, h) {
+        // Simplified face ROI: center ellipse region (avoids hair/background)
+        // In production, use MediaPipe FaceMesh for precise skin mask
+        let rSum = 0, gSum = 0, bSum = 0, count = 0;
+        const cx = w / 2, cy = h * 0.45; // slightly above center (forehead/cheeks)
+        const rx = w * 0.25, ry = h * 0.3;
+        
+        // Sample every 2nd pixel in ROI for speed
+        for (let y = Math.floor(cy - ry); y < Math.floor(cy + ry); y += 2) {
+            for (let x = Math.floor(cx - rx); x < Math.floor(cx + rx); x += 2) {
+                // Ellipse check
+                if (((x-cx)/rx)**2 + ((y-cy)/ry)**2 <= 1) {
+                    const i = (y * w + x) * 4;
+                    rSum += data[i];
+                    gSum += data[i+1];
+                    bSum += data[i+2];
+                    count++;
+                }
+            }
+        }
+        if (count === 0) return null;
+        return { r: rSum/count, g: gSum/count, b: bSum/count };
+    }
+
     function processFrame() {
         if (!cameraRunning) return;
 
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = frame.data;
-
-        // 提取面部中央區域的綠色通道平均值
-        // 簡化版：取畫面中央區域
-        let greenSum = 0;
-        let count = 0;
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        const rw = canvas.width * 0.3;
-        const rh = canvas.height * 0.3;
-
-        for (let y = cy - rh; y < cy + rh; y += 4) {
-            for (let x = cx - rw; x < cx + rw; x += 4) {
-                const i = (Math.floor(y) * canvas.width + Math.floor(x)) * 4;
-                greenSum += data[i + 1]; // Green channel
-                count++;
+        
+        const roi = extractFaceROI(frame.data, canvas.width, canvas.height);
+        if (roi) {
+            rBuffer.push(roi.r);
+            gBuffer.push(roi.g);
+            bBuffer.push(roi.b);
+            
+            if (rBuffer.length > MAX_BUFFER) {
+                rBuffer.shift(); gBuffer.shift(); bBuffer.shift();
             }
         }
 
-        const greenAvg = greenSum / count;
-        signalBuffer.push(greenAvg);
-        if (signalBuffer.length > 300) signalBuffer.shift();
-
         frameCount++;
-
-        // 每 60 幀計算一次心率（約 2 秒 @ 30fps）
-        if (frameCount % 60 === 0 && signalBuffer.length > 100) {
-            calculateHeartRate();
+        
+        // Calculate BPM every 30 frames (~1s) once we have enough data
+        // POS needs at least WIN_LEN_SEC worth of frames
+        const minFrames = Math.ceil(WIN_LEN_SEC * 30);
+        if (frameCount % 30 === 0 && rBuffer.length >= minFrames) {
+            calculateHeartRatePOS();
         }
 
         drawSignalGraph();
         requestAnimationFrame(processFrame);
     }
 
-    function calculateHeartRate() {
-        // 簡易峰值檢測
-        const signal = signalBuffer.slice(-100);
-        const mean = signal.reduce((a,b) => a+b, 0) / signal.length;
-        const threshold = mean * 1.002; // 極微小的變化
-
-        let peaks = 0;
-        for (let i = 2; i < signal.length - 2; i++) {
-            if (signal[i] > signal[i-1] && signal[i] > signal[i+1] && signal[i] > threshold) {
-                peaks++;
+    // --- POS Algorithm (adapted from hschn58/rPPG Full_Stack/POS_method/POS_method.py) ---
+    function calculateHeartRatePOS() {
+        const N = rBuffer.length;
+        const fs = 30; // assumed fps
+        const winLen = Math.round(WIN_LEN_SEC * fs);
+        const overlap = Math.round(winLen * 0.5);
+        
+        // Convert to arrays for processing
+        const R = rBuffer.slice();
+        const G = gBuffer.slice();
+        const B = bBuffer.slice();
+        
+        // POS sliding window pulse extraction
+        let pulse = new Float32Array(N).fill(0);
+        let wsum = new Float32Array(N).fill(0);
+        
+        for (let start = 0; start <= N - winLen; start += overlap) {
+            const stop = start + winLen;
+            
+            // Normalize RGB in this window
+            let rMean = 0, gMean = 0, bMean = 0;
+            for (let i = start; i < stop; i++) { rMean += R[i]; gMean += G[i]; bMean += B[i]; }
+            rMean /= winLen; gMean /= winLen; bMean /= winLen;
+            
+            if (rMean < 1 || gMean < 1 || bMean < 1) continue; // skip dark frames
+            
+            // Chrominance signals X and Y
+            let xArr = [], yArr = [];
+            for (let i = start; i < stop; i++) {
+                const r = R[i] / rMean;
+                const g = G[i] / gMean;
+                const b = B[i] / bMean;
+                xArr.push(3*r - 2*g);
+                yArr.push(1.5*r + g - 1.5*b);
+            }
+            
+            // Alpha = std(X) / std(Y)
+            const xStd = std(xArr);
+            const yStd = std(yArr);
+            const alpha = xStd / (yStd + 1e-8);
+            
+            // S = X - alpha * Y
+            const hannWin = hanning(winLen);
+            for (let i = 0; i < winLen; i++) {
+                const s = xArr[i] - alpha * yArr[i];
+                pulse[start + i] += s * hannWin[i];
+                wsum[start + i] += hannWin[i];
             }
         }
-
-        // 估算 BPM（假設 30fps，100幀 = 3.33秒）
-        const bpm = Math.round(peaks * (60 / 3.33) * 0.6); // 修正因子
-        const clampedBpm = Math.max(50, Math.min(120, bpm)); // 合理範圍
-
-        document.getElementById('bpmValue').textContent = clampedBpm;
-        updateStressGauge(clampedBpm);
+        
+        // Normalize overlap-add
+        for (let i = 0; i < N; i++) {
+            pulse[i] /= (wsum[i] + 1e-12);
+        }
+        
+        // Bandpass filter (simple moving average + detrend approximation)
+        const filtered = bandpassFilter(pulse, fs, BAND_LOW, BAND_HIGH);
+        posSignal = filtered.slice(-200); // keep last 200 samples for display
+        
+        // FFT peak detection on filtered signal
+        const bpm = fftPeakBPM(filtered, fs);
+        
+        if (bpm && bpm >= 45 && bpm <= 200) {
+            // Exponential moving average smoothing
+            bpmHistory.push(bpm);
+            if (bpmHistory.length > 5) bpmHistory.shift();
+            const smoothBpm = bpmHistory.reduce((a,b) => a+b, 0) / bpmHistory.length;
+            const displayBpm = Math.round(smoothBpm);
+            
+            lastBpm = displayBpm;
+            document.getElementById('bpmValue').textContent = displayBpm;
+            updateStressGauge(displayBpm);
+        }
+    }
+    
+    // --- DSP Helper Functions ---
+    function mean(arr) { return arr.reduce((a,b) => a+b, 0) / arr.length; }
+    function std(arr) {
+        const m = mean(arr);
+        return Math.sqrt(arr.reduce((s,v) => s + (v-m)**2, 0) / arr.length);
+    }
+    function hanning(n) {
+        const w = new Float32Array(n);
+        for (let i = 0; i < n; i++) w[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n - 1)));
+        return w;
+    }
+    
+    function bandpassFilter(signal, fs, lowHz, highHz) {
+        // Simple IIR bandpass (2nd order Butterworth approximation)
+        // Avoids heavy FFT for real-time; sufficient for HR range
+        const out = new Float32Array(signal.length);
+        const dt = 1/fs;
+        const rc_low = 1 / (2 * Math.PI * lowHz);
+        const rc_high = 1 / (2 * Math.PI * highHz);
+        const alpha_low = dt / (rc_low + dt);
+        const alpha_high = rc_high / (rc_high + dt);
+        
+        let hp = 0, lp = 0;
+        for (let i = 0; i < signal.length; i++) {
+            // High-pass (remove DC/drift)
+            hp = alpha_high * (hp + signal[i] - (i > 0 ? signal[i-1] : 0));
+            // Low-pass (remove HF noise)
+            lp = lp + alpha_low * (hp - lp);
+            out[i] = lp;
+        }
+        return out;
+    }
+    
+    function fftPeakBPM(signal, fs) {
+        // Radix-2 FFT on power-of-2 length segment
+        const N = Math.min(signal.length, 256); // cap for performance
+        const seg = signal.slice(-N);
+        
+        // Compute magnitude spectrum via DFT (optimized for small N)
+        // Only compute frequencies in [BAND_LOW, BAND_HIGH]
+        let maxMag = 0, peakFreq = 0;
+        const binHz = fs / N;
+        const lowBin = Math.ceil(BAND_LOW / binHz);
+        const highBin = Math.floor(BAND_HIGH / binHz);
+        
+        for (let k = lowBin; k <= highBin; k++) {
+            let re = 0, im = 0;
+            for (let n = 0; n < N; n++) {
+                const angle = -2 * Math.PI * k * n / N;
+                re += seg[n] * Math.cos(angle);
+                im += seg[n] * Math.sin(angle);
+            }
+            const mag = re*re + im*im;
+            if (mag > maxMag) {
+                maxMag = mag;
+                peakFreq = k * binHz;
+            }
+        }
+        
+        return peakFreq > 0 ? peakFreq * 60 : null;
     }
 
     function drawSignalGraph() {
         signalCtx.fillStyle = 'rgba(0,0,0,0.3)';
         signalCtx.fillRect(0, 0, signalCanvas.width, signalCanvas.height);
 
-        if (signalBuffer.length < 2) return;
+        if (posSignal.length < 2) return;
 
-        const signal = signalBuffer.slice(-200);
+        const signal = posSignal;
         const min = Math.min(...signal);
         const max = Math.max(...signal);
         const range = max - min || 1;
@@ -797,7 +942,6 @@
         signalCtx.strokeStyle = '#4ecdc4';
         signalCtx.lineWidth = 2;
         signalCtx.beginPath();
-
         for (let i = 0; i < signal.length; i++) {
             const x = (i / signal.length) * signalCanvas.width;
             const y = signalCanvas.height - ((signal[i] - min) / range) * signalCanvas.height * 0.8 - signalCanvas.height * 0.1;
@@ -805,6 +949,13 @@
             else signalCtx.lineTo(x, y);
         }
         signalCtx.stroke();
+        
+        // Draw BPM label on graph
+        if (lastBpm) {
+            signalCtx.fillStyle = '#ff6b6b';
+            signalCtx.font = 'bold 14px sans-serif';
+            signalCtx.fillText(`${lastBpm} BPM`, 10, 20);
+        }
     }
 
     function updateStressGauge(bpm) {
