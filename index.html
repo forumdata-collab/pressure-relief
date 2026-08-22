@@ -278,12 +278,12 @@
         .cam-preview {
             position: relative;
             width: 100%;
-            max-width: 260px;
+            max-width: 240px;
             margin: 0 auto;
             border-radius: var(--radius-sm);
             overflow: hidden;
             background: rgba(0,0,0,0.3);
-            aspect-ratio: 4/3;
+            aspect-ratio: 3/4;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -919,7 +919,7 @@ async function toggleCamera(){
 
 async function startCamera(){
     try{
-        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user', width:320, height:240 } });
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user', width:240, height:320, aspectRatio: { ideal: 0.75 } } });
         video.srcObject = camStream;
         await video.play();
         camRunning = true;
@@ -928,8 +928,8 @@ async function startCamera(){
         document.getElementById('bpmDisplay').style.display = 'block';
         sigCanvas.style.display = 'block';
         video.style.display = 'block';
-        camCanvas.width = 320; camCanvas.height = 240;
-        sigCanvas.width = 260; sigCanvas.height = 60;
+        camCanvas.width = 240; camCanvas.height = 320;
+        sigCanvas.width = 200; sigCanvas.height = 60;
         sigBuf = []; frameCnt = 0;
         initFaceMesh();
         processFrame();
