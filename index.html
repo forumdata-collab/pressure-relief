@@ -1070,6 +1070,67 @@ function processFrame(){
             RPPG.roiBuf.push({f:roi,l:roi,r:roi, t:performance.now()}); if(RPPG.roiBuf.length>RPPG.maxLen) RPPG.roiBuf.shift();
         }
     }
+    // Draw cartoon overlay: blur face + cat ears following landmarks
+    if(latestLandmarks){
+        const w = camCanvas.width, h = camCanvas.height;
+        // Blur face region (ellipse around landmarks)
+        let minX=w, minY=h, maxX=0, maxY=0;
+        for(const lm of latestLandmarks){
+            const px=lm.x*w, py=lm.y*h;
+            if(px<minX) minX=px; if(py<minY) minY=py;
+            if(px>maxX) maxX=px; if(py>maxY) maxY=py;
+        }
+        const pad=20;
+        minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
+        maxX=Math.min(w,maxX+pad); maxY=Math.min(h,maxY+pad);
+        const fw=maxX-minX, fh=maxY-minY;
+        if(fw>10 && fh>10){
+            try{
+                const faceData = camCtx.getImageData(minX,minY,fw,fh);
+                // Simple box blur (3x3 avg) — ponytail: fast enough for 240x320
+                const bd = faceData.data;
+                const tmp = new Uint8ClampedArray(bd);
+                for(let y=1;y<fh-1;y++) for(let x=1;x<fw-1;x++){
+                    const i=(y*fw+x)*4;
+                    for(let c=0;c<3;c++){
+                        tmp[i+c] = (bd[i+c]+bd[i+c-4]+bd[i+c+4]+bd[i+c-fw*4]+bd[i+c+fw*4])/5|0;
+                    }
+                }
+                faceData.data.set(tmp);
+                camCtx.putImageData(faceData, minX, minY);
+            }catch(e){}
+        }
+        // Cat ears at top-left and top-right of head (landmarks 234, 454 ≈ ear tops)
+        const earSize = Math.min(w,h)*0.18;
+        const drawEar = (lm, flip) => {
+            const ex = lm.x*w, ey = lm.y*h - earSize*0.6;
+            camCtx.save();
+            camCtx.translate(ex, ey);
+            if(flip) camCtx.scale(-1,1);
+            camCtx.fillStyle = '#ffb6c1';
+            camCtx.beginPath();
+            camCtx.moveTo(0, 0);
+            camCtx.lineTo(-earSize*0.5, -earSize);
+            camCtx.lineTo(earSize*0.5, -earSize);
+            camCtx.closePath();
+            camCtx.fill();
+            camCtx.strokeStyle = '#ff69b4';
+            camCtx.lineWidth = 2;
+            camCtx.stroke();
+            // Inner ear
+            camCtx.fillStyle = '#ff91a4';
+            camCtx.beginPath();
+            camCtx.moveTo(0, -earSize*0.15);
+            camCtx.lineTo(-earSize*0.25, -earSize*0.7);
+            camCtx.lineTo(earSize*0.25, -earSize*0.7);
+            camCtx.closePath();
+            camCtx.fill();
+            camCtx.restore();
+        };
+        if(latestLandmarks[234]) drawEar(latestLandmarks[234], false);
+        if(latestLandmarks[454]) drawEar(latestLandmarks[454], true);
+    }
+
     frameCnt++;
     // Time-based gate: sample counts vary with real fps (FaceMesh can drop rAF to ~15fps),
     // so require 8s of wall-clock coverage in the buffer instead of a fixed sample count.
