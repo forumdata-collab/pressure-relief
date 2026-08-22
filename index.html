@@ -864,13 +864,54 @@ function stopBreathing(){
     document.getElementById('breathStatus').textContent = '已停止';
 }
 
-// ==================== 鏡頭心跳 rPPG ====================
+// ==================== 鏡頭心跳 rPPG + FaceMesh ====================
 const video = document.getElementById('videoElement');
 const camCanvas = document.getElementById('cameraCanvas');
 const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
 const sigCanvas = document.getElementById('signalGraph');
 const sigCtx = sigCanvas.getContext('2d');
 let camRunning = false, camStream = null, sigBuf = [], frameCnt = 0;
+
+// Local WASM FaceMesh assets (served from /wasm/)
+const LOCAL_WASM_PATH = 'wasm/face_mesh_solution_wasm_bin.wasm';
+const LOCAL_ASSETS_PATH = 'wasm/face_mesh_solution_packed_assets.data';
+let faceMeshInstance = null, faceMeshReady = false, latestLandmarks = null;
+
+// Skin landmark indices (forehead, cheeks, chin — excludes eyes/lips/hair)
+const FACE_SKIN_IDS = [10,151,9,8,168,6,197,195,5,4,1,19,94,2,164,0,13,14,17,37,39,40,185,61,146,91,181,84,17,314,405,321,375,291,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,281,424,431,389,355,454,323,362,398,384,385,386,387,388,46,53,52,65,55,193,245,128,114,188,122];
+
+async function initFaceMesh(){
+    if(typeof FaceMesh === 'undefined') return;
+    try{
+        faceMeshInstance = new FaceMesh({locateFile: f => `wasm/${f}`});
+        faceMeshInstance.setOptions({maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
+        faceMeshInstance.onResults(r => { if(r.multiFaceLandmarks && r.multiFaceLandmarks.length) latestLandmarks = r.multiFaceLandmarks[0]; });
+        await faceMeshInstance.initialize();
+        faceMeshReady = true;
+    }catch(e){ console.warn('FaceMesh init failed:', e); }
+}
+
+function extractSkinROI(data, w, h){
+    let rSum=0, gSum=0, bSum=0, count=0;
+    if(faceMeshReady && latestLandmarks){
+        for(const idx of FACE_SKIN_IDS){
+            if(idx >= latestLandmarks.length) continue;
+            const lm = latestLandmarks[idx];
+            const px = Math.floor(lm.x * w), py = Math.floor(lm.y * h);
+            for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+                const sx=px+dx, sy=py+dy;
+                if(sx<0||sx>=w||sy<0||sy>=h) continue;
+                const i=(sy*w+sx)*4; rSum+=data[i]; gSum+=data[i+1]; bSum+=data[i+2]; count++;
+            }
+        }
+    } else {
+        const cx=w/2, cy=h*0.45, rx=w*0.25, ry=h*0.3;
+        for(let y=Math.floor(cy-ry); y<Math.floor(cy+ry); y+=2)
+            for(let x=Math.floor(cx-rx); x<Math.floor(cx+rx); x+=2)
+                if(((x-cx)/rx)**2+((y-cy)/ry)**2<=1){ const i=(y*w+x)*4; rSum+=data[i]; gSum+=data[i+1]; bSum+=data[i+2]; count++; }
+    }
+    return count ? {r:rSum/count, g:gSum/count, b:bSum/count} : null;
+}
 
 async function toggleCamera(){
     camRunning ? stopCamera() : await startCamera();
@@ -890,6 +931,7 @@ async function startCamera(){
         camCanvas.width = 320; camCanvas.height = 240;
         sigCanvas.width = 260; sigCanvas.height = 60;
         sigBuf = []; frameCnt = 0;
+        initFaceMesh();
         processFrame();
     }catch(e){ alert('無法存取攝像頭：'+e.message); }
 }
@@ -907,19 +949,19 @@ function stopCamera(){
 function processFrame(){
     if(!camRunning) return;
     camCtx.drawImage(video, 0, 0, camCanvas.width, camCanvas.height);
-    const frame = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
-    const d = frame.data;
-    let gSum = 0, cnt = 0;
-    const cx = camCanvas.width/2, cy = camCanvas.height/2;
-    const rw = camCanvas.width*0.25, rh = camCanvas.height*0.25;
-    for(let y=cy-rh; y<cy+rh; y+=4){
-        for(let x=cx-rw; x<cx+rw; x+=4){
-            const i = (Math.floor(y)*camCanvas.width + Math.floor(x))*4;
-            gSum += d[i+1]; cnt++;
-        }
+    
+    // Feed frame to FaceMesh if ready
+    if(faceMeshReady && faceMeshInstance){
+        try{ faceMeshInstance.send({image: video}); }catch(e){}
     }
-    sigBuf.push(gSum/cnt);
-    if(sigBuf.length > 300) sigBuf.shift();
+    
+    const frame = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
+    const roi = extractSkinROI(frame.data, camCanvas.width, camCanvas.height);
+    if(roi){
+        // Use green channel from skin-masked ROI for rPPG signal
+        sigBuf.push(roi.g);
+        if(sigBuf.length > 300) sigBuf.shift();
+    }
     frameCnt++;
     if(frameCnt % 90 === 0 && sigBuf.length > 120) calcBPM();
     drawSig();
