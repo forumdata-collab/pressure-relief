@@ -796,6 +796,34 @@
     }
 })();
 
+// ==================== 粵語語音導航 ====================
+const voiceAudio = {
+    welcome: new Audio('audio/welcome.ogg'),
+    inhale: new Audio('audio/breath_inhale.ogg'),
+    exhale: new Audio('audio/breath_exhale.ogg'),
+    hold: new Audio('audio/breath_hold.ogg'),
+    release: new Audio('audio/breath_release.ogg')
+};
+// Preload all audio
+Object.values(voiceAudio).forEach(a => a.preload = 'auto');
+
+function playVoice(key){
+    const a = voiceAudio[key];
+    if(!a) return;
+    a.currentTime = 0;
+    a.play().catch(()=>{}); // ignore autoplay block
+}
+
+// Map breath phase text to voice key
+function getVoiceKey(phaseText){
+    if(phaseText === '吸氣') return 'inhale';
+    if(phaseText === '吐氣') return 'exhale';
+    if(phaseText === '屏息') return 'hold';
+    return null;
+}
+
+let lastVoicePhase = null;
+
 // ==================== 呼吸引導 ====================
 let breathMode = 'box', breathRunning = false, breathTimer = null, breathStart = 0;
 const breathModes = {
@@ -818,6 +846,7 @@ function toggleBreathing(){
 
 function startBreathing(){
     breathRunning = true;
+    playVoice('welcome');
     document.getElementById('breathToggle').textContent = '停止';
     const ring = document.getElementById('breathRing');
     const core = document.getElementById('breathCore');
@@ -830,6 +859,7 @@ function startBreathing(){
 
     let phaseIdx = 0;
     let phaseStart = Date.now();
+    lastVoicePhase = null;
 
     function tick(){
         if(!breathRunning) return;
@@ -838,13 +868,21 @@ function startBreathing(){
         const dur = cfg.durations[phaseIdx];
         const progress = Math.min(elapsed / dur, 1);
 
-        phaseEl.textContent = cfg.phases[phaseIdx];
+        const currentPhase = cfg.phases[phaseIdx];
+        phaseEl.textContent = currentPhase;
         secEl.textContent = Math.max(0, Math.ceil(dur - elapsed)) + '秒';
         bar.style.width = (progress * 100) + '%';
-        status.textContent = cfg.name + ' — ' + cfg.phases[phaseIdx];
+        status.textContent = cfg.name + ' — ' + currentPhase;
 
-        const isInhale = cfg.phases[phaseIdx] === '吸氣';
-        const isExhale = cfg.phases[phaseIdx] === '吐氣';
+        // Play voice cue on phase change
+        const vKey = getVoiceKey(currentPhase);
+        if(vKey && lastVoicePhase !== currentPhase){
+            playVoice(vKey);
+            lastVoicePhase = currentPhase;
+        }
+
+        const isInhale = currentPhase === '吸氣';
+        const isExhale = currentPhase === '吐氣';
         const scale = isInhale ? 1 + progress * 0.4 : isExhale ? 1.4 - progress * 0.4 : 1.4;
         ring.style.transform = 'scale(' + scale + ')';
         ring.style.opacity = 0.2 + progress * 0.3;
