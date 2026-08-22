@@ -1015,36 +1015,59 @@ function processFrame(){
         if(sigBuf.length > 300) sigBuf.shift();
     }
     frameCnt++;
-    if(frameCnt % 90 === 0 && sigBuf.length > 120) calcBPM();
+    // BPM every 90 frames (~3s) once buffer has ≥6s of data; needs 2 consecutive
+    // agreeing readings before display updates — kills the 50→120→90 jitter.
+    if(frameCnt % 90 === 0 && sigBuf.length > 180) calcBPM();
     drawSig();
     requestAnimationFrame(processFrame);
 }
 
+// Rolling median filter over recent BPM readings: robust to single-frame spikes
+let bpmSmoothed = null;
+const bpmWindow = [];
+
 function calcBPM(){
-    const s = sigBuf.slice(-120);
+    const s = sigBuf.slice(-240);   // ~8s window @30fps for frequency resolution
     // Detrend: remove linear trend to avoid DC bias affecting peak detection
     const n = s.length;
-    const m = s.reduce((a,b)=>a+b,0)/n;
     let sumX=0, sumY=0, sumXY=0, sumXX=0;
     for(let i=0;i<n;i++){ sumX+=i; sumY+=s[i]; sumXY+=i*s[i]; sumXX+=i*i; }
     const slope = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX + 1e-12);
     const intercept = (sumY - slope*sumX) / n;
     const detrended = s.map((v,i) => v - (slope*i + intercept));
-    
+
     // Adaptive threshold based on signal std dev instead of fixed ratio
     const std = Math.sqrt(detrended.reduce((a,v)=>a+v*v,0)/n);
     const th = std * 0.3; // ponytail: fixed threshold factor, tune if noisy
-    
-    let peaks = 0;
+
+    // Peak detection with refractory period (~300ms) so one beat = one peak
+    let peaks = 0, lastPeakIdx = -1000;
+    const minGap = Math.round(n * 4 / s.length * 0.9) || 9;
     for(let i=2;i<n-2;i++){
-        if(detrended[i]>detrended[i-1] && detrended[i]>detrended[i+1] && detrended[i]>detrended[i-2] && detrended[i]>detrended[i+2] && detrended[i]>th) peaks++;
+        if(detrended[i]>detrended[i-1] && detrended[i]>detrended[i+1] &&
+           detrended[i]>detrended[i-2] && detrended[i]>detrended[i+2] &&
+           detrended[i]>th && i - lastPeakIdx >= minGap){
+            peaks++; lastPeakIdx = i;
+        }
     }
-    // Window is 120 frames @ ~30fps = 4 seconds
-    const bpm = Math.round(peaks * (60/4));
-    const clamped = Math.max(50, Math.min(120, bpm));
-    document.getElementById('bpmValue').textContent = clamped;
-    updateGauge(clamped);
-    recordBPM(clamped); // for trend line + session summary
+    // Window ~8s → bpm = peaks/8*60
+    const bpm = Math.round(peaks * 60 / (n/30));
+    if(bpm < 45 || bpm > 160) return; // physiologically implausible → discard
+
+    // Median-of-5 smoothing: a single bad reading can't move the display
+    bpmWindow.push(bpm);
+    if(bpmWindow.length > 5) bpmWindow.shift();
+    const sorted = [...bpmWindow].sort((a,b)=>a-b);
+    const median = sorted[Math.floor(sorted.length/2)];
+    // Require at least 3 readings before showing a number at all
+    if(bpmWindow.length < 3) return;
+    if(bpmSmoothed !== null && Math.abs(median - bpmSmoothed) > 15 && bpmWindow.length < 5)
+        return; // big jump with little evidence → wait for more readings
+
+    bpmSmoothed = median;
+    document.getElementById('bpmValue').textContent = bpmSmoothed;
+    updateGauge(bpmSmoothed);
+    recordBPM(bpmSmoothed);
 }
 
 function drawSig(){
