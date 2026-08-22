@@ -1034,8 +1034,17 @@ function processFrame(){
         }
     } else {
         // fallback ellipse → single ROI treated as all three
-        const roi = extractSkinROI(d, w, h);
-        if(roi){ RPPG.roiBuf.push({f:roi,l:roi,r:roi}); if(RPPG.roiBuf.length>RPPG.maxLen) RPPG.roiBuf.shift(); }
+        const cx = w/2, cy = h*0.45, rx = w*0.25, ry = h*0.3;
+        let r=0,g=0,b=0,c=0;
+        for(let y=Math.floor(cy-ry); y<Math.floor(cy+ry); y+=2)
+            for(let x=Math.floor(cx-rx); x<Math.floor(cx+rx); x+=2)
+                if(((x-cx)/rx)**2+((y-cy)/ry)**2<=1){
+                    const i=(y*w+x)*4; r+=d[i]; g+=d[i+1]; b+=d[i+2]; c++;
+                }
+        if(c){
+            const roi = {r:r/c, g:g/c, b:b/c};
+            RPPG.roiBuf.push({f:roi,l:roi,r:roi}); if(RPPG.roiBuf.length>RPPG.maxLen) RPPG.roiBuf.shift();
+        }
     }
     frameCnt++;
     const need = Math.ceil(RPPG.WIN_SEC * RPPG.FS * 0.8);
