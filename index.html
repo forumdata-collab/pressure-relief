@@ -721,6 +721,25 @@
                         <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;" id="bpmHint"></div>
                     </div>
                     <canvas id="signalGraph" class="signal-graph"></canvas>
+                    <!-- Extended vitals grid (HRV / breathing / stress index / cardiac workload) -->
+                    <div id="vitalsGrid" style="display:none;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px;">
+                        <div style="background:rgba(125,211,192,0.06);border-radius:10px;padding:8px 10px;">
+                            <div style="font-size:0.65rem;color:var(--text-muted);">HRV (RMSSD)</div>
+                            <div style="font-size:1.1rem;font-weight:700;color:var(--primary);" id="vHrv">--<span style="font-size:0.7rem;color:var(--text-muted);"> ms</span></div>
+                        </div>
+                        <div style="background:rgba(125,211,192,0.06);border-radius:10px;padding:8px 10px;">
+                            <div style="font-size:0.65rem;color:var(--text-muted);">呼吸率</div>
+                            <div style="font-size:1.1rem;font-weight:700;color:var(--accent);" id="vBr">--<span style="font-size:0.7rem;color:var(--text-muted);"> /min</span></div>
+                        </div>
+                        <div style="background:rgba(125,211,192,0.06);border-radius:10px;padding:8px 10px;">
+                            <div style="font-size:0.65rem;color:var(--text-muted);">壓力指數</div>
+                            <div style="font-size:1.1rem;font-weight:700;" id="vStress">--<span style="font-size:0.7rem;color:var(--text-muted);"> /10</span></div>
+                        </div>
+                        <div style="background:rgba(125,211,192,0.06);border-radius:10px;padding:8px 10px;">
+                            <div style="font-size:0.65rem;color:var(--text-muted);">心臟負荷</div>
+                            <div style="font-size:1.1rem;font-weight:700;" id="vWork">--<span style="font-size:0.7rem;color:var(--text-muted);"> dB</span></div>
+                        </div>
+                    </div>
                     <div style="margin-top:12px;">
                         <button class="btn-main" id="camToggle" onclick="toggleCamera()">啟動攝像頭</button>
                     </div>
@@ -1161,6 +1180,8 @@ function calcBPM(){
     if(RPPG.snrHistory.length > 10) RPPG.snrHistory.shift();
     if(snr < 1.0) return; // <1dB → signal mostly noise, skip this round
 
+    computeExtendedVitals(filt);
+
     // Median-of-5 display smoothing (unchanged — works well)
     bpmWindow.push(Math.round(bpm));
     if(bpmWindow.length > 5) bpmWindow.shift();
@@ -1173,6 +1194,73 @@ function calcBPM(){
     document.getElementById('bpmValue').textContent = displayBpm;
     updateGauge(displayBpm);
     recordBPM(displayBpm);
+}
+
+// ---- Extended vitals: derived from the same filtered pulse signal ----
+// All computed from inter-beat intervals (IBI) after peak detection on `filt`.
+let lastVitals = null;
+
+function computeExtendedVitals(sig){
+    // Peak detection with refractory period (same as before)
+    const n = sig.length;
+    const std = Math.sqrt(sig.reduce((a,v)=>a+v*v,0)/n);
+    const th = std * 0.4;
+    const minGap = Math.round(0.3 * RPPG.FS); // 300ms
+    const peaks = [];
+    let lastIdx = -1000;
+    for(let i=2;i<n-2;i++){
+        if(sig[i]>sig[i-1] && sig[i]>sig[i+1] && sig[i]>sig[i-2] && sig[i]>sig[i+2] &&
+           sig[i]>th && i-lastIdx >= minGap){ peaks.push(i); lastIdx=i; }
+    }
+    if(peaks.length < 5) return; // need ≥5 beats for meaningful IBI stats
+
+    // IBI in ms
+    const ibi = [];
+    for(let i=1;i<peaks.length;i++) ibi.push((peaks[i]-peaks[i-1])/RPPG.FS*1000);
+
+    // --- HRV (RMSSD): root-mean-square of successive IBI differences ---
+    let sqSum=0;
+    for(let i=1;i<ibi.length;i++) sqSum += (ibi[i]-ibi[i-1])**2;
+    const rmssd = Math.sqrt(sqSum/(ibi.length-1));
+
+    // --- Breathing rate: RSA — low-freq modulation of IBI series (0.13–0.5 Hz) ---
+    let br = null;
+    if(ibi.length >= 8){
+        const {bpm: brBpm} = fftPeak(Float32Array.from(ibi), 60/ (ibi.reduce((a,b)=>a+b,0)/ibi.length) , 0.13, 0.5);
+        if(brBpm && brBpm >= 8 && brBpm <= 30) br = Math.round(brBpm);
+    }
+
+    // --- Stress index (Baevsky-style, simplified): SI = AMo / (2 * Mo) ---
+    // Histogram of IBIs: Mo = most common IBI, AMo = % of that bin
+    const bins = {};
+    ibi.forEach(v => { const k = Math.round(v/50)*50; bins[k] = (bins[k]||0)+1; });
+    let moVal=0, moCnt=0, total=ibi.length;
+    for(const [k,c] of Object.entries(bins)) if(c>moCnt){ moCnt=c; moVal=+k; }
+    const amo = moCnt/total*100;
+    const si = Math.min(10, amo / (2*(moVal/1000)) / 10);  // scaled to 0–10
+
+    // --- Cardiac workload (dB): proxy from HR × HRV-inverse energy ---
+    const meanHr = 60000 / (ibi.reduce((a,b)=>a+b,0)/ibi.length);
+    const work = Math.round(Math.log10(meanHr * (rmssd+1)) * 20*10)/10; // heuristic dB scale
+
+    lastVitals = {rmssd, br, si, work};
+    renderVitals();
+}
+
+function renderVitals(){
+    if(!lastVitals) return;
+    const grid = document.getElementById('vitalsGrid');
+    if(grid) grid.style.display = 'grid';
+    const set=(id,val,unit,color)=>{ const el=document.getElementById(id); if(el) el.innerHTML = val+`<span style="font-size:0.7rem;color:var(--text-muted);"> ${unit}</span>`; };
+    set('vHrv', Math.round(lastVitals.rmssd), 'ms');
+    if(lastVitals.br) set('vBr', lastVitals.br, '/min'); else set('vBr','--','/min');
+    const sEl = document.getElementById('vStress');
+    if(sEl){
+        const si = lastVitals.si;
+        sEl.innerHTML = si.toFixed(1)+`<span style="font-size:0.7rem;color:var(--text-muted);"> /10</span>`;
+        sEl.style.color = si<4 ? 'var(--primary)' : si<7 ? '#f0c040' : '#ff7b7b';
+    }
+    set('vWork', lastVitals.work.toFixed(1), 'dB');
 }
 
 function updateGauge(bpm){
