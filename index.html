@@ -28,21 +28,33 @@
 
         body.light {
             --bg-dark: #f0f7f5;
-            --bg-card: rgba(255,255,255,0.85);
-            --bg-card-hover: rgba(255,255,255,0.95);
-            --text: #1a2b28;
-            --text-muted: #5a6b68;
-            --border: rgba(45,150,120,0.12);
-            --shadow: 0 4px 24px rgba(40,100,90,0.1);
-            --shadow-hover: 0 8px 32px rgba(40,100,90,0.18);
+            --bg-card: rgba(255,255,255,0.92);
+            --bg-card-hover: rgba(255,255,255,0.98);
+            --text: #16241f;
+            --text-muted: #3d514c;
+            --border: rgba(20,90,70,0.22);
+            --shadow: 0 4px 24px rgba(40,100,90,0.12);
+            --shadow-hover: 0 8px 32px rgba(40,100,90,0.2);
+            --primary: #0e7a63;
+            --primary-light: rgba(14,122,99,0.12);
+            --primary-glow: rgba(14,122,99,0.35);
+            --accent: #c2185b;
+            --accent-light: rgba(194,24,91,0.1);
         }
         body.light .bg-layer {
             background:
-                radial-gradient(ellipse at 20% 20%, rgba(125,211,192,0.2) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(244,166,205,0.15) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 50%, rgba(125,211,192,0.08) 0%, transparent 70%),
+                radial-gradient(ellipse at 20% 20%, rgba(125,211,192,0.25) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(244,166,205,0.18) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(125,211,192,0.1) 0%, transparent 70%),
                 var(--bg-dark);
         }
+        body.light .card { border-color: var(--border); }
+        body.light .chip { color: var(--text); }
+        body.light .sound-pill { color: var(--text); }
+        body.light .btn-main { color: #ffffff; }
+        body.light .bpm-number { color: #c62828; }
+        body.light .timer-digits { color: var(--accent); }
+        body.light .gauge-needle { stroke: #16241f; }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -668,7 +680,7 @@
         <div class="grid">
             <!-- 呼吸引導 -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">🫁</span>呼吸引導</div>
+                <div class="card-title"><span class="icon">🫁</span><span data-i18n="breath">呼吸引導</span></div>
                 <div class="breath-wrap">
                     <div class="breath-visual">
                         <div class="breath-ring" id="breathRing"></div>
@@ -691,7 +703,7 @@
 
             <!-- 鏡頭心跳 -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">📷</span>鏡頭心跳偵測</div>
+                <div class="card-title"><span class="icon">📷</span><span data-i18n="camera">鏡頭心跳偵測</span></div>
                 <div class="cam-wrap">
                     <div class="cam-preview">
                         <video id="videoElement" autoplay playsinline></video>
@@ -719,7 +731,7 @@
 
             <!-- 音樂（縮小版） -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">🎵</span>放鬆音樂</div>
+                <div class="card-title"><span class="icon">🎵</span><span data-i18n="music">放鬆音樂</span></div>
                 <div class="music-bar">
                     <span class="sound-pill" onclick="playSound('rain',this)"><span class="s-icon">🌧️</span>細雨</span>
                     <span class="sound-pill" onclick="playSound('ocean',this)"><span class="s-icon">🌊</span>海浪</span>
@@ -735,7 +747,7 @@
 
             <!-- 冥想計時器 -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">⏱️</span>冥想計時器</div>
+                <div class="card-title"><span class="icon">⏱️</span><span data-i18n="timer">冥想計時器</span></div>
                 <div class="timer-face">
                     <div class="timer-digits" id="timerDigits">05:00</div>
                 </div>
@@ -753,7 +765,7 @@
 
             <!-- 壓力儀表板 -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">📊</span>壓力指數</div>
+                <div class="card-title"><span class="icon">📊</span><span data-i18n="gauge">壓力指數</span></div>
                 <div class="gauge-wrap">
                     <svg class="gauge-svg" viewBox="0 0 200 110">
                         <defs>
@@ -780,7 +792,7 @@
 
             <!-- 心情日記 -->
             <div class="card fade-in">
-                <div class="card-title"><span class="icon">📝</span>心情日記</div>
+                <div class="card-title"><span class="icon">📝</span><span data-i18n="journal">心情日記</span></div>
                 <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">這次減壓後，你的感受是？</p>
                 <div class="mood-row">
                     <div class="mood-dot" onclick="selectMood('😊',this)">😊</div>
@@ -867,13 +879,17 @@ function startBreathing(){
         const dur = cfg.durations[phaseIdx];
         const progress = Math.min(elapsed / dur, 1);
 
-        phaseEl.textContent = cfg.phases[phaseIdx];
-        secEl.textContent = Math.max(0, Math.ceil(dur - elapsed)) + '秒';
+        // i18n phase text (canonical zh keys drive logic; display via I18N)
+        const phaseZh = cfg.phases[phaseIdx];
+        const t = I18N[currentLang];
+        const phaseDisplay = phaseZh === '吸氣' ? t.inhale : phaseZh === '吐氣' ? t.exhale : t.holdBreath;
+        phaseEl.textContent = phaseDisplay;
+        secEl.textContent = Math.max(0, Math.ceil(dur - elapsed)) + t.sec;
         bar.style.width = (progress * 100) + '%';
-        status.textContent = cfg.name + ' — ' + cfg.phases[phaseIdx];
+        status.textContent = cfg.name + ' — ' + phaseDisplay;
 
-        const isInhale = cfg.phases[phaseIdx] === '吸氣';
-        const isExhale = cfg.phases[phaseIdx] === '吐氣';
+        const isInhale = phaseZh === '吸氣';
+        const isExhale = phaseZh === '吐氣';
         const scale = isInhale ? 1 + progress * 0.4 : isExhale ? 1.4 - progress * 0.4 : 1.4;
         ring.style.transform = 'scale(' + scale + ')';
         ring.style.opacity = 0.2 + progress * 0.3;
@@ -1312,19 +1328,24 @@ if(localStorage.getItem('prTheme') === 'light'){
 const I18N = {
     zh: {
         title: '🧘 釋放壓力空間', subtitle: '深呼吸，讓身心回歸平靜',
-        breath: '🫁 呼吸引導', start: '開始呼吸', stop: '停止',
-        camera: '📷 鏡頭心跳偵測', camStart: '啟動攝像頭', camStop: '關閉攝像頭',
-        music: '🎵 放鬆音樂', timer: '⏱️ 冥想計時器',
-        gauge: '📊 壓力指數', journal: '📝 心情日記',
-        save: '💾 記錄心情', exportBtn: '📥 匯出'
+        breath: '呼吸引導', start: '開始呼吸', stop: '停止',
+        camera: '鏡頭心跳偵測', camStart: '啟動攝像頭', camStop: '關閉攝像頭',
+        music: '放鬆音樂', timer: '冥想計時器',
+        gauge: '壓力指數', journal: '心情日記',
+        save: '💾 記錄心情', exportBtn: '📥 匯出', meditate: '開始冥想',
+        // breath phases
+        inhale: '吸氣', holdBreath: '屏息', exhale: '吐氣', ready: '準備',
+        sec: '秒'
     },
     en: {
         title: '🧘 Pressure Relief', subtitle: 'Breathe deep, find your calm',
-        breath: '🫁 Breathing Guide', start: 'Start', stop: 'Stop',
-        camera: '📷 Heart Rate (rPPG)', camStart: 'Start Camera', camStop: 'Stop Camera',
-        music: '🎵 Relaxing Sounds', timer: '⏱️ Meditation Timer',
-        gauge: '📊 Stress Level', journal: '📝 Mood Journal',
-        save: '💾 Save Entry', exportBtn: '📥 Export'
+        breath: 'Breathing Guide', start: 'Start', stop: 'Stop',
+        camera: 'Heart Rate (rPPG)', camStart: 'Start Camera', camStop: 'Stop Camera',
+        music: 'Relaxing Sounds', timer: 'Meditation Timer',
+        gauge: 'Stress Level', journal: 'Mood Journal',
+        save: '💾 Save Entry', exportBtn: '📥 Export', meditate: 'Meditate',
+        inhale: 'Inhale', holdBreath: 'Hold', exhale: 'Exhale', ready: 'Ready',
+        sec: 's'
     }
 };
 let currentLang = localStorage.getItem('prLang') || 'zh';
@@ -1335,9 +1356,14 @@ function applyLang(){
         const k = el.getAttribute('data-i18n');
         if(t[k]) el.textContent = t[k];
     });
-    // Buttons without data-i18n (dynamic text)
-    const bt = document.getElementById('breathToggle');
-    if(bt && !breathRunning) bt.textContent = t.start;
+    document.querySelectorAll('[data-i18n-btn]').forEach(el => {
+        const k = el.getAttribute('data-i18n-btn');
+        if(!t[k]) return;
+        // Don't overwrite running-state button text
+        if(el.id === 'breathToggle' && breathRunning) { el.textContent = t.stop; return; }
+        if(el.id === 'timerToggle' && timerRun) { el.textContent = t.pause || 'Pause'; return; }
+        el.textContent = t[k];
+    });
     const ct = document.getElementById('camToggle');
     if(ct) ct.textContent = camRunning ? t.camStop : t.camStart;
     document.getElementById('langToggle').textContent = currentLang === 'zh' ? 'EN' : '中';
