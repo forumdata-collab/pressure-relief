@@ -970,13 +970,25 @@ function processFrame(){
 
 function calcBPM(){
     const s = sigBuf.slice(-120);
-    const m = s.reduce((a,b)=>a+b,0)/s.length;
-    const th = m * 1.0015;
+    // Detrend: remove linear trend to avoid DC bias affecting peak detection
+    const n = s.length;
+    const m = s.reduce((a,b)=>a+b,0)/n;
+    let sumX=0, sumY=0, sumXY=0, sumXX=0;
+    for(let i=0;i<n;i++){ sumX+=i; sumY+=s[i]; sumXY+=i*s[i]; sumXX+=i*i; }
+    const slope = (n*sumXY - sumX*sumY) / (n*sumXX - sumX*sumX + 1e-12);
+    const intercept = (sumY - slope*sumX) / n;
+    const detrended = s.map((v,i) => v - (slope*i + intercept));
+    
+    // Adaptive threshold based on signal std dev instead of fixed ratio
+    const std = Math.sqrt(detrended.reduce((a,v)=>a+v*v,0)/n);
+    const th = std * 0.3; // ponytail: fixed threshold factor, tune if noisy
+    
     let peaks = 0;
-    for(let i=2;i<s.length-2;i++){
-        if(s[i]>s[i-1] && s[i]>s[i+1] && s[i]>s[i-2] && s[i]>s[i+2] && s[i]>th) peaks++;
+    for(let i=2;i<n-2;i++){
+        if(detrended[i]>detrended[i-1] && detrended[i]>detrended[i+1] && detrended[i]>detrended[i-2] && detrended[i]>detrended[i+2] && detrended[i]>th) peaks++;
     }
-    const bpm = Math.round(peaks * (60/4) * 0.55);
+    // Window is 120 frames @ ~30fps = 4 seconds
+    const bpm = Math.round(peaks * (60/4));
     const clamped = Math.max(50, Math.min(120, bpm));
     document.getElementById('bpmValue').textContent = clamped;
     updateGauge(clamped);
