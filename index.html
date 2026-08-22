@@ -718,6 +718,7 @@
                         <span class="heart-beat">❤️</span>
                         <span class="bpm-number" id="bpmValue">--</span>
                         <span class="bpm-unit">BPM</span>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;" id="bpmHint"></div>
                     </div>
                     <canvas id="signalGraph" class="signal-graph"></canvas>
                     <div style="margin-top:12px;">
@@ -1048,6 +1049,18 @@ function processFrame(){
     }
     frameCnt++;
     const need = Math.ceil(RPPG.WIN_SEC * RPPG.FS * 0.8);
+    // Countdown hint while sampling
+    const hint = document.getElementById('bpmHint');
+    if(hint){
+        if(RPPG.displayBpm !== null){
+            hint.textContent = '';
+        } else {
+            const remaining = Math.max(0, Math.ceil(need - RPPG.roiBuf.length) / RPPG.FS);
+            hint.textContent = remaining > 0
+                ? `採樣中… 約 ${remaining.toFixed(0)} 秒後顯示心率（請保持不動）`
+                : '分析中…';
+        }
+    }
     if(frameCnt % 60 === 0 && RPPG.roiBuf.length >= need) calcBPM();
     drawSig();
     requestAnimationFrame(processFrame);
