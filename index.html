@@ -1049,7 +1049,7 @@ function processFrame(){
         const l = _roiMean(d,w,h,ROI_LCHEEK);
         const rr = _roiMean(d,w,h,ROI_RCHEEK);
         if(f&&l&&rr){
-            RPPG.roiBuf.push({f,l,r:rr});
+            RPPG.roiBuf.push({f,l,r:rr, t:performance.now()});   // real timestamp per sample
             if(RPPG.roiBuf.length > RPPG.maxLen){ RPPG.roiBuf.shift(); }
         }
     } else {
@@ -1063,7 +1063,7 @@ function processFrame(){
                 }
         if(c){
             const roi = {r:r/c, g:g/c, b:b/c};
-            RPPG.roiBuf.push({f:roi,l:roi,r:roi}); if(RPPG.roiBuf.length>RPPG.maxLen) RPPG.roiBuf.shift();
+            RPPG.roiBuf.push({f:roi,l:roi,r:roi, t:performance.now()}); if(RPPG.roiBuf.length>RPPG.maxLen) RPPG.roiBuf.shift();
         }
     }
     frameCnt++;
@@ -1171,8 +1171,16 @@ function fftPeak(sig, fs, loHz, hiHz){
 
 function calcBPM(){
     const raw = buildSignal();
-    const filt = bandpass(detrendSig(raw), RPPG.FS, RPPG.BAND_LOW, RPPG.BAND_HIGH);
-    const {bpm, snr} = fftPeak(filt, RPPG.FS, RPPG.BAND_LOW, RPPG.BAND_HIGH);
+    // Real sampling rate from timestamps — requestAnimationFrame rate varies 20-60fps.
+    // Hardcoded FS=30 made BPM scale with frame-rate drift → 120/90/105 rollercoaster.
+    const buf = RPPG.roiBuf;
+    const spanSec = (buf[buf.length-1].t - buf[0].t) / 1000;
+    const fs = spanSec > 1 ? (buf.length-1) / spanSec : RPPG.FS;
+    RPPG.liveFs = fs;  // for drawSig
+    if(fs < 12 || fs > 70) return;  // implausible capture rate → skip
+
+    const filt = bandpass(detrendSig(raw), fs, RPPG.BAND_LOW, RPPG.BAND_HIGH);
+    const {bpm, snr} = fftPeak(filt, fs, RPPG.BAND_LOW, RPPG.BAND_HIGH);
     if(!bpm || bpm < 45 || bpm > 160) return;
 
     // Quality gate: reject low-SNR readings entirely instead of showing junk
@@ -1180,7 +1188,7 @@ function calcBPM(){
     if(RPPG.snrHistory.length > 10) RPPG.snrHistory.shift();
     if(snr < 1.0) return; // <1dB → signal mostly noise, skip this round
 
-    computeExtendedVitals(filt);
+    computeExtendedVitals(filt, fs);
 
     // Median-of-5 display smoothing (unchanged — works well)
     bpmWindow.push(Math.round(bpm));
@@ -1200,12 +1208,12 @@ function calcBPM(){
 // All computed from inter-beat intervals (IBI) after peak detection on `filt`.
 let lastVitals = null;
 
-function computeExtendedVitals(sig){
+function computeExtendedVitals(sig, fs){
     // Peak detection with refractory period (same as before)
     const n = sig.length;
     const std = Math.sqrt(sig.reduce((a,v)=>a+v*v,0)/n);
     const th = std * 0.4;
-    const minGap = Math.round(0.3 * RPPG.FS); // 300ms
+    const minGap = Math.round(0.3 * fs); // 300ms
     const peaks = [];
     let lastIdx = -1000;
     for(let i=2;i<n-2;i++){
@@ -1216,7 +1224,7 @@ function computeExtendedVitals(sig){
 
     // IBI in ms
     const ibi = [];
-    for(let i=1;i<peaks.length;i++) ibi.push((peaks[i]-peaks[i-1])/RPPG.FS*1000);
+    for(let i=1;i<peaks.length;i++) ibi.push((peaks[i]-peaks[i-1])/fs*1000);
 
     // --- HRV (RMSSD): root-mean-square of successive IBI differences ---
     let sqSum=0;
@@ -1284,7 +1292,7 @@ function updateGauge(bpm){
 function drawSig(){
     sigCtx.fillStyle='rgba(0,0,0,0.2)'; sigCtx.fillRect(0,0,sigCanvas.width,sigCanvas.height);
     if(RPPG.roiBuf.length < 2){ return; }
-    const s = bandpass(detrendSig(buildSignal()), RPPG.FS, RPPG.BAND_LOW, RPPG.BAND_HIGH).slice(-240);
+    const s = bandpass(detrendSig(buildSignal()), RPPG.liveFs || RPPG.FS, RPPG.BAND_LOW, RPPG.BAND_HIGH).slice(-240);
     const mn=Math.min(...s), mx=Math.max(...s), rng=mx-mn||1;
     sigCtx.strokeStyle='#7dd3c0'; sigCtx.lineWidth=1.5; sigCtx.beginPath();
     for(let i=0;i<s.length;i++){
