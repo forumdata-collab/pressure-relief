@@ -1175,6 +1175,24 @@ function calcBPM(){
     recordBPM(displayBpm);
 }
 
+function updateGauge(bpm){
+    const needle = document.getElementById('gaugeNeedle');
+    const arc = document.getElementById('gaugeArc');
+    const result = document.getElementById('stressResult');
+    const hint = document.getElementById('stressHint');
+    if(!needle || !result) return;
+    let angle=-90, offset=251, text='', cls='', tip='';
+    if(bpm < 65){ angle=-70; offset=50; text='非常放鬆 🌿'; cls='relaxed'; tip='心率很低，身心處於深度放鬆。繼續保持！'; }
+    else if(bpm < 75){ angle=-35; offset=120; text='放鬆狀態 😌'; cls='relaxed'; tip='心率平穩，壓力水平良好。'; }
+    else if(bpm < 85){ angle=5; offset=180; text='中等壓力 😐'; cls='moderate'; tip='心率略高，建議多做幾輪深呼吸。'; }
+    else if(bpm < 100){ angle=45; offset=220; text='壓力偏高 😰'; cls='high'; tip='偵測到較高壓力，建議搭配冥想計時器進行 10 分鐘冥想。'; }
+    else { angle=80; offset=250; text='高度壓力 🚨'; cls='high'; tip='壓力指數較高，請專注呼吸引導，讓身體慢慢平靜。'; }
+    needle.style.transform = 'rotate('+angle+'deg)';
+    arc.style.strokeDashoffset = offset;
+    result.textContent = text; result.className = 'stress-result '+cls;
+    hint.textContent = tip;
+}
+
 function drawSig(){
     sigCtx.fillStyle='rgba(0,0,0,0.2)'; sigCtx.fillRect(0,0,sigCanvas.width,sigCanvas.height);
     if(RPPG.roiBuf.length < 2){ return; }
