@@ -2,1251 +2,1149 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>🧘 釋放壓力空間</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            background-size: 400% 400%;
-            animation: gradientShift 20s ease infinite;
-            color: #e8e8e8;
-            min-height: 100vh;
-            overflow-x: hidden;
+        :root {
+            --primary: #7dd3c0;
+            --primary-light: rgba(125, 211, 192, 0.15);
+            --primary-glow: rgba(125, 211, 192, 0.4);
+            --accent: #f4a6cd;
+            --accent-light: rgba(244, 166, 205, 0.15);
+            --bg-dark: #0d1117;
+            --bg-card: rgba(22, 27, 34, 0.7);
+            --bg-card-hover: rgba(30, 36, 46, 0.8);
+            --text: #e6edf3;
+            --text-muted: #8b949e;
+            --border: rgba(125, 211, 192, 0.08);
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --shadow-hover: 0 8px 32px rgba(0,0,0,0.5);
+            --radius: 16px;
+            --radius-sm: 10px;
         }
 
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* 動態背景 */
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(125,211,192,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(244,166,205,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(125,211,192,0.03) 0%, transparent 70%),
+                var(--bg-dark);
+            animation: bgPulse 12s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.85; }
+        }
+
+        /* 粒子 */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0;
+            animation: floatUp linear infinite;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.3; }
+            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 16px;
         }
 
+        /* Header */
         header {
             text-align: center;
-            padding: 30px 0;
+            padding: 24px 0 16px;
         }
-
         header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(90deg, #a8edea, #fed6e3);
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
+            background-clip: text;
+            letter-spacing: -0.5px;
         }
-
         header p {
-            color: #b0b0b0;
-            font-size: 1.1rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-top: 4px;
         }
 
+        /* Card 基礎 */
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary-glow), transparent);
+            opacity: 0.5;
+        }
+        .card:hover {
+            background: var(--bg-card-hover);
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+        .card-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .icon {
+            font-size: 1.2rem;
+        }
+
+        /* 網格布局 */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+            grid-template-columns: 1fr;
+            gap: 14px;
         }
 
-        .card {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 25px;
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
+        @media (min-width: 640px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .grid .card:first-child {
+                grid-column: span 2;
+            }
         }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        }
-
-        .card h2 {
-            font-size: 1.3rem;
-            margin-bottom: 15px;
-            color: #a8edea;
-        }
-
-        /* ===== 呼吸引導 ===== */
-        .breath-container {
+        /* ===== 呼吸引導（優化） ===== */
+        .breath-wrap {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px;
+            gap: 16px;
         }
-
-        .breath-circle {
-            width: 200px;
-            height: 200px;
+        .breath-visual {
+            position: relative;
+            width: 160px;
+            height: 160px;
+        }
+        .breath-ring {
+            position: absolute;
+            inset: 0;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(168,237,234,0.3), rgba(168,237,234,0.05));
-            border: 2px solid rgba(168,237,234,0.5);
+            border: 2px solid var(--primary);
+            opacity: 0.3;
+            transition: all 0.15s linear;
+        }
+        .breath-ring-outer {
+            position: absolute;
+            inset: -12px;
+            border-radius: 50%;
+            border: 1px solid var(--primary);
+            opacity: 0;
+            animation: ringPulse 4s ease-in-out infinite;
+        }
+        @keyframes ringPulse {
+            0%, 100% { transform: scale(1); opacity: 0; }
+            50% { transform: scale(1.1); opacity: 0.15; }
+        }
+        .breath-core {
+            position: absolute;
+            inset: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--primary-glow), transparent 70%);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
-            position: relative;
-            transition: all 0.1s linear;
+            flex-direction: column;
+            transition: all 0.15s linear;
         }
-
-        .breath-circle::before {
-            content: '';
-            position: absolute;
+        .breath-phase {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .breath-sec {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .breath-bar {
             width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 2px solid rgba(168,237,234,0.2);
-            animation: pulseRing 4s ease-in-out infinite;
-        }
-
-        @keyframes pulseRing {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0; }
-        }
-
-        .breath-text {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #a8edea;
-        }
-
-        .breath-controls {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            background: rgba(168,237,234,0.2);
-            color: #a8edea;
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s;
-            border: 1px solid rgba(168,237,234,0.3);
-        }
-
-        .btn:hover, .btn.active {
-            background: rgba(168,237,234,0.4);
-            transform: scale(1.05);
-        }
-
-        .btn-primary {
-            background: rgba(168,237,234,0.3);
-            font-weight: bold;
-        }
-
-        /* ===== 鏡頭偵測 ===== */
-        .camera-section {
-            text-align: center;
-        }
-
-        #videoElement {
-            width: 100%;
-            max-width: 300px;
-            border-radius: 15px;
-            display: none;
-            transform: scaleX(-1);
-        }
-
-        #cameraCanvas {
-            width: 100%;
-            max-width: 300px;
-            border-radius: 15px;
-            display: none;
-            transform: scaleX(-1);
-        }
-
-        .heart-rate-display {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #ff6b6b;
-            margin: 15px 0;
-        }
-
-        .heart-rate-display .unit {
-            font-size: 1rem;
-            color: #b0b0b0;
-        }
-
-        .heart-icon {
-            display: inline-block;
-            animation: heartbeat 1s ease-in-out infinite;
-        }
-
-        @keyframes heartbeat {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-        }
-
-        .signal-graph {
-            width: 100%;
-            height: 80px;
-            background: rgba(0,0,0,0.3);
-            border-radius: 10px;
-            margin-top: 10px;
-        }
-
-        /* ===== 音樂面板 ===== */
-        .music-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-
-        .sound-btn {
-            padding: 15px;
-            border-radius: 15px;
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: #e8e8e8;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: center;
-        }
-
-        .sound-btn:hover, .sound-btn.playing {
-            background: rgba(168,237,234,0.2);
-            border-color: rgba(168,237,234,0.5);
-        }
-
-        .sound-btn .icon {
-            font-size: 1.5rem;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .volume-slider {
-            width: 100%;
-            margin-top: 15px;
-            -webkit-appearance: none;
-            height: 6px;
-            border-radius: 3px;
-            background: rgba(255,255,255,0.2);
-            outline: none;
-        }
-
-        .volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            background: #a8edea;
-            cursor: pointer;
-        }
-
-        /* ===== 冥想計時器 ===== */
-        .timer-display {
-            font-size: 3rem;
-            text-align: center;
-            font-variant-numeric: tabular-nums;
-            margin: 20px 0;
-            color: #fed6e3;
-        }
-
-        .timer-presets {
-            display: flex;
-            gap: 8px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .timer-bar {
-            width: 100%;
-            height: 6px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 3px;
-            margin-top: 15px;
+            height: 3px;
+            background: rgba(125,211,192,0.1);
+            border-radius: 2px;
+            margin-top: 8px;
             overflow: hidden;
         }
-
-        .timer-bar-fill {
+        .breath-bar-fill {
             height: 100%;
-            background: linear-gradient(90deg, #a8edea, #fed6e3);
-            border-radius: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 2px;
+            transition: width 0.1s linear;
+            width: 0%;
+        }
+        .breath-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(125,211,192,0.08);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .chip:hover, .chip.active {
+            background: var(--primary-light);
+            border-color: var(--primary-glow);
+            color: var(--primary);
+        }
+        .btn-main {
+            padding: 8px 24px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, var(--primary), #5cb8a3);
+            color: #0d1117;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(125,211,192,0.25);
+        }
+        .btn-main:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(125,211,192,0.35);
+        }
+        .btn-main:active {
+            transform: scale(0.97);
+        }
+        .status-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        /* ===== 鏡頭心跳（優化） ===== */
+        .cam-wrap {
+            text-align: center;
+        }
+        .cam-preview {
+            position: relative;
+            width: 100%;
+            max-width: 260px;
+            margin: 0 auto;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: rgba(0,0,0,0.3);
+            aspect-ratio: 4/3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #videoElement, #cameraCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: none;
+        }
+        .cam-placeholder {
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .cam-placeholder .emoji {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .cam-placeholder p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .bpm-display {
+            display: none;
+            margin: 12px 0;
+        }
+        .bpm-number {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #ff7b7b;
+            font-variant-numeric: tabular-nums;
+        }
+        .bpm-unit {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+        .heart-beat {
+            display: inline-block;
+            animation: heartBeat 1s ease-in-out infinite;
+        }
+        @keyframes heartBeat {
+            0%, 100% { transform: scale(1); }
+            15% { transform: scale(1.15); }
+            30% { transform: scale(1); }
+            45% { transform: scale(1.15); }
+        }
+        .signal-graph {
+            width: 100%;
+            height: 60px;
+            background: rgba(0,0,0,0.25);
+            border-radius: var(--radius-sm);
+            display: none;
+        }
+        .cam-tip {
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: rgba(125,211,192,0.06);
+            border-left: 2px solid var(--primary);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            text-align: left;
+        }
+
+        /* ===== 音樂面板（縮小優化） ===== */
+        .music-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .sound-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .sound-pill .s-icon {
+            font-size: 1rem;
+        }
+        .sound-pill:hover, .sound-pill.playing {
+            background: var(--primary-light);
+            border-color: var(--primary-glow);
+            color: var(--primary);
+        }
+        .sound-pill.playing {
+            box-shadow: 0 0 12px var(--primary-glow);
+        }
+        .vol-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+        .vol-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .vol-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255,255,255,0.1);
+            outline: none;
+        }
+        .vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: 0 0 8px var(--primary-glow);
+        }
+        .vol-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            border: none;
+        }
+        .mute-btn {
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+        .mute-btn:hover {
+            background: rgba(255,107,107,0.1);
+            border-color: rgba(255,107,107,0.3);
+            color: #ff7b7b;
+        }
+
+        /* ===== 冥想計時器（優化） ===== */
+        .timer-face {
+            text-align: center;
+            padding: 8px 0;
+        }
+        .timer-digits {
+            font-size: 2.6rem;
+            font-weight: 200;
+            font-variant-numeric: tabular-nums;
+            color: var(--accent);
+            letter-spacing: 2px;
+            font-family: 'SF Mono', monospace;
+        }
+        .timer-presets {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            margin: 12px 0;
+        }
+        .timer-presets .chip {
+            padding: 4px 12px;
+            font-size: 0.75rem;
+        }
+        .timer-progress {
+            width: 100%;
+            height: 3px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+        .timer-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 2px;
             transition: width 1s linear;
             width: 100%;
         }
 
-        /* ===== 壓力儀表板 ===== */
-        .stress-gauge {
-            width: 200px;
-            height: 100px;
-            margin: 0 auto;
-            position: relative;
+        /* ===== 壓力儀表板（優化） ===== */
+        .gauge-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
         }
-
-        .gauge-arc {
-            width: 200px;
+        .gauge-svg {
+            width: 180px;
             height: 100px;
-            border-radius: 100px 100px 0 0;
-            background: conic-gradient(from 180deg, #4ecdc4 0deg, #ffe66d 60deg, #ff6b6b 120deg, #ff6b6b 180deg);
-            mask: radial-gradient(circle at 50% 100%, transparent 60%, black 61%);
-            -webkit-mask: radial-gradient(circle at 50% 100%, transparent 60%, black 61%);
         }
-
+        .gauge-arc-bg {
+            fill: none;
+            stroke: rgba(255,255,255,0.06);
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+        .gauge-arc-fill {
+            fill: none;
+            stroke: url(#gaugeGradient);
+            stroke-width: 12;
+            stroke-linecap: round;
+            stroke-dasharray: 251;
+            stroke-dashoffset: 251;
+            transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
         .gauge-needle {
-            position: absolute;
-            bottom: 0;
-            left: 50%;
-            width: 4px;
-            height: 90px;
-            background: #fff;
-            transform-origin: bottom center;
-            transform: translateX(-50%) rotate(-90deg);
-            transition: transform 1s ease;
-            border-radius: 2px;
+            transform-origin: 100px 95px;
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
         .gauge-labels {
             display: flex;
             justify-content: space-between;
-            padding: 0 20px;
-            margin-top: 5px;
-            font-size: 0.8rem;
-            color: #888;
+            width: 180px;
+            padding: 0 10px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
         }
-
-        .stress-value {
+        .stress-result {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .stress-result.relaxed { color: var(--primary); }
+        .stress-result.moderate { color: #f0c040; }
+        .stress-result.high { color: #ff7b7b; }
+        .stress-hint {
+            font-size: 0.78rem;
+            color: var(--text-muted);
             text-align: center;
-            font-size: 1.2rem;
-            margin-top: 10px;
+            line-height: 1.5;
+            margin-top: 6px;
         }
 
-        .stress-value.relaxed { color: #4ecdc4; }
-        .stress-value.moderate { color: #ffe66d; }
-        .stress-value.high { color: #ff6b6b; }
-
-        /* ===== 心情日記 ===== */
-        .mood-grid {
+        /* ===== 心情日記（優化） ===== */
+        .mood-row {
             display: flex;
-            gap: 10px;
+            gap: 6px;
             justify-content: center;
-            margin: 15px 0;
+            margin: 10px 0;
         }
-
-        .mood-btn {
-            font-size: 2rem;
-            background: none;
-            border: 2px solid transparent;
+        .mood-dot {
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
         }
-
-        .mood-btn:hover, .mood-btn.selected {
+        .mood-dot:hover {
+            transform: scale(1.15);
+            background: var(--primary-light);
+            border-color: var(--primary-glow);
+        }
+        .mood-dot.selected {
             transform: scale(1.2);
-            border-color: rgba(168,237,234,0.5);
-            background: rgba(168,237,234,0.1);
+            background: var(--primary-light);
+            border-color: var(--primary);
+            box-shadow: 0 0 16px var(--primary-glow);
         }
-
-        .journal-entry {
+        .journal-input {
             width: 100%;
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
             background: rgba(0,0,0,0.2);
-            color: #e8e8e8;
+            color: var(--text);
+            font-size: 0.85rem;
             resize: vertical;
-            min-height: 60px;
-            margin-top: 10px;
+            min-height: 50px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
         }
-
+        .journal-input:focus {
+            border-color: var(--primary-glow);
+        }
+        .journal-input::placeholder {
+            color: var(--text-muted);
+        }
         .history-list {
-            max-height: 150px;
+            max-height: 120px;
             overflow-y: auto;
             margin-top: 10px;
+            padding-right: 4px;
         }
-
+        .history-list::-webkit-scrollbar { width: 3px; }
+        .history-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
         .history-item {
-            padding: 8px;
+            padding: 8px 10px;
             background: rgba(255,255,255,0.03);
-            border-radius: 8px;
-            margin-bottom: 5px;
-            font-size: 0.85rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 6px;
+            font-size: 0.78rem;
+            line-height: 1.4;
+        }
+        .history-item time {
+            color: var(--text-muted);
+            font-size: 0.7rem;
         }
 
-        /* ===== 粒子背景 ===== */
-        .particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: -1;
-        }
-
-        .particle {
-            position: absolute;
-            width: 4px;
-            height: 4px;
-            background: rgba(168,237,234,0.3);
-            border-radius: 50%;
-            animation: float 15s infinite;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
-            10% { opacity: 1; }
-            90% { opacity: 1; }
-            100% { transform: translateY(-10vh) rotate(720deg); opacity: 0; }
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 24px 0 32px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            line-height: 1.8;
         }
 
         /* 響應式 */
-        @media (max-width: 768px) {
-            header h1 { font-size: 1.8rem; }
-            .grid { grid-template-columns: 1fr; }
-            .breath-circle { width: 150px; height: 150px; }
+        @media (max-width: 639px) {
+            header h1 { font-size: 1.5rem; }
+            .timer-digits { font-size: 2rem; }
+            .bpm-number { font-size: 1.8rem; }
         }
 
-        .status-text {
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 5px;
+        /* 動畫工具 */
+        .fade-in {
+            animation: fadeIn 0.5s ease;
         }
-
-        .tip-box {
-            background: rgba(168,237,234,0.1);
-            border-left: 3px solid #a8edea;
-            padding: 12px;
-            border-radius: 0 10px 10px 0;
-            margin-top: 10px;
-            font-size: 0.9rem;
-            line-height: 1.6;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
 <body>
+    <div class="bg-layer"></div>
     <div class="particles" id="particles"></div>
 
     <div class="container">
-        <header>
+        <header class="fade-in">
             <h1>🧘 釋放壓力空間</h1>
             <p>深呼吸，讓身心回歸平靜</p>
         </header>
 
         <div class="grid">
             <!-- 呼吸引導 -->
-            <div class="card">
-                <h2>🫁 呼吸引導</h2>
-                <div class="breath-container">
-                    <div class="breath-circle" id="breathCircle">
-                        <span class="breath-text" id="breathText">準備</span>
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">🫁</span>呼吸引導</div>
+                <div class="breath-wrap">
+                    <div class="breath-visual">
+                        <div class="breath-ring" id="breathRing"></div>
+                        <div class="breath-ring-outer"></div>
+                        <div class="breath-core" id="breathCore">
+                            <span class="breath-phase" id="breathPhase">準備</span>
+                            <span class="breath-sec" id="breathSec"></span>
+                        </div>
                     </div>
+                    <div class="breath-bar"><div class="breath-bar-fill" id="breathBarFill"></div></div>
                     <div class="breath-controls">
-                        <button class="btn" onclick="setBreathMode('478')">4-7-8 放鬆</button>
-                        <button class="btn active" onclick="setBreathMode('box')">盒式呼吸</button>
-                        <button class="btn" onclick="setBreathMode('coherent')">共振呼吸</button>
-                        <button class="btn btn-primary" id="breathToggle" onclick="toggleBreathing()">開始呼吸</button>
+                        <span class="chip" onclick="setBreathMode('478',this)">4-7-8 放鬆</span>
+                        <span class="chip active" onclick="setBreathMode('box',this)">盒式呼吸</span>
+                        <span class="chip" onclick="setBreathMode('coherent',this)">共振 5-5</span>
+                        <button class="btn-main" id="breathToggle" onclick="toggleBreathing()">開始呼吸</button>
                     </div>
                     <p class="status-text" id="breathStatus">選擇模式後點擊「開始呼吸」</p>
                 </div>
             </div>
 
-            <!-- 鏡頭心跳偵測 -->
-            <div class="card">
-                <h2>📷 鏡頭心跳偵測</h2>
-                <div class="camera-section">
-                    <video id="videoElement" autoplay playsinline></video>
-                    <canvas id="cameraCanvas"></canvas>
-                    <div id="cameraPlaceholder" style="padding: 40px; background: rgba(0,0,0,0.2); border-radius: 15px;">
-                        <p style="font-size: 3rem;">📷</p>
-                        <p>點擊下方按鈕啟動攝像頭</p>
-                        <p class="status-text">使用 rPPG 技術分析面部微血管變化</p>
+            <!-- 鏡頭心跳 -->
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">📷</span>鏡頭心跳偵測</div>
+                <div class="cam-wrap">
+                    <div class="cam-preview">
+                        <video id="videoElement" autoplay playsinline></video>
+                        <canvas id="cameraCanvas"></canvas>
+                        <div class="cam-placeholder" id="camPlaceholder">
+                            <span class="emoji">📷</span>
+                            <p>點擊下方按鈕啟動攝像頭</p>
+                            <p style="font-size:0.75rem;margin-top:4px;opacity:0.6">rPPG 面部微血管分析</p>
+                        </div>
                     </div>
-                    <div class="heart-rate-display" id="heartRateDisplay" style="display:none;">
-                        <span class="heart-icon">❤️</span>
-                        <span id="bpmValue">--</span>
-                        <span class="unit">BPM</span>
+                    <div class="bpm-display" id="bpmDisplay">
+                        <span class="heart-beat">❤️</span>
+                        <span class="bpm-number" id="bpmValue">--</span>
+                        <span class="bpm-unit">BPM</span>
                     </div>
-                    <canvas id="signalGraph" class="signal-graph" style="display:none;"></canvas>
-                    <div style="margin-top: 15px;">
-                        <button class="btn btn-primary" id="cameraToggle" onclick="toggleCamera()">啟動攝像頭</button>
+                    <canvas id="signalGraph" class="signal-graph"></canvas>
+                    <div style="margin-top:12px;">
+                        <button class="btn-main" id="camToggle" onclick="toggleCamera()">啟動攝像頭</button>
                     </div>
-                    <div class="tip-box">
-                        <strong>💡 小提醒：</strong>請在穩定光源下保持面部靜止，偵測結果僅供參考，不能取代醫療設備。血壓偵測因準確度限制，本版本暫不實作。
+                    <div class="cam-tip">
+                        💡 請在穩定光源下保持面部靜止。偵測結果僅供參考，不能取代醫療設備。血壓偵測因準確度限制暫不實作。
                     </div>
                 </div>
             </div>
 
-            <!-- 放鬆音樂 -->
-            <div class="card">
-                <h2>🎵 放鬆音樂</h2>
-                <div class="music-grid">
-                    <button class="sound-btn" onclick="playSound('rain')">
-                        <span class="icon">🌧️</span>
-                        <span>細雨</span>
-                    </button>
-                    <button class="sound-btn" onclick="playSound('ocean')">
-                        <span class="icon">🌊</span>
-                        <span>海浪</span>
-                    </button>
-                    <button class="sound-btn" onclick="playSound('forest')">
-                        <span class="icon">🌲</span>
-                        <span>森林</span>
-                    </button>
-                    <button class="sound-btn" onclick="playSound('drone')">
-                        <span class="icon">🎶</span>
-                        <span>冥想音</span>
-                    </button>
+            <!-- 音樂（縮小版） -->
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">🎵</span>放鬆音樂</div>
+                <div class="music-bar">
+                    <span class="sound-pill" onclick="playSound('rain',this)"><span class="s-icon">🌧️</span>細雨</span>
+                    <span class="sound-pill" onclick="playSound('ocean',this)"><span class="s-icon">🌊</span>海浪</span>
+                    <span class="sound-pill" onclick="playSound('forest',this)"><span class="s-icon">🌲</span>森林</span>
+                    <span class="sound-pill" onclick="playSound('drone',this)"><span class="s-icon">🎶</span>冥想</span>
                 </div>
-                <div style="margin-top: 15px;">
-                    <label style="font-size: 0.9rem; color: #888;">音量</label>
-                    <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="30" onchange="setVolume(this.value)">
+                <div class="vol-wrap">
+                    <span class="vol-label">🔊</span>
+                    <input type="range" class="vol-slider" id="volSlider" min="0" max="100" value="30" oninput="setVolume(this.value)">
+                    <button class="mute-btn" onclick="stopAllSounds()">靜音</button>
                 </div>
-                <button class="btn" style="margin-top: 10px; width: 100%;" onclick="stopAllSounds()">🔇 靜音</button>
             </div>
 
             <!-- 冥想計時器 -->
-            <div class="card">
-                <h2>⏱️ 冥想計時器</h2>
-                <div class="timer-display" id="timerDisplay">05:00</div>
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">⏱️</span>冥想計時器</div>
+                <div class="timer-face">
+                    <div class="timer-digits" id="timerDigits">05:00</div>
+                </div>
                 <div class="timer-presets">
-                    <button class="btn" onclick="setTimer(3)">3 分鐘</button>
-                    <button class="btn active" onclick="setTimer(5)">5 分鐘</button>
-                    <button class="btn" onclick="setTimer(10)">10 分鐘</button>
-                    <button class="btn" onclick="setTimer(20)">20 分鐘</button>
+                    <span class="chip" onclick="setTimer(3,this)">3分</span>
+                    <span class="chip active" onclick="setTimer(5,this)">5分</span>
+                    <span class="chip" onclick="setTimer(10,this)">10分</span>
+                    <span class="chip" onclick="setTimer(20,this)">20分</span>
                 </div>
-                <div class="timer-bar">
-                    <div class="timer-bar-fill" id="timerBarFill"></div>
-                </div>
-                <div style="text-align: center; margin-top: 15px;">
-                    <button class="btn btn-primary" id="timerToggle" onclick="toggleTimer()">開始冥想</button>
+                <div class="timer-progress"><div class="timer-progress-fill" id="timerProgress"></div></div>
+                <div style="text-align:center;">
+                    <button class="btn-main" id="timerToggle" onclick="toggleTimer()">開始冥想</button>
                 </div>
             </div>
 
-            <!-- 壓力指數 -->
-            <div class="card">
-                <h2>📊 壓力指數</h2>
-                <div class="stress-gauge">
-                    <div class="gauge-arc"></div>
-                    <div class="gauge-needle" id="gaugeNeedle"></div>
-                </div>
-                <div class="gauge-labels">
-                    <span>放鬆</span>
-                    <span>中等</span>
-                    <span>高壓</span>
-                </div>
-                <div class="stress-value relaxed" id="stressValue">請先測量心率</div>
-                <div class="tip-box" id="stressTip">
-                    啟動攝像頭測量心率後，系統將根據心率變化估算您的壓力狀態。
+            <!-- 壓力儀表板 -->
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">📊</span>壓力指數</div>
+                <div class="gauge-wrap">
+                    <svg class="gauge-svg" viewBox="0 0 200 110">
+                        <defs>
+                            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" style="stop-color:#7dd3c0"/>
+                                <stop offset="50%" style="stop-color:#f0c040"/>
+                                <stop offset="100%" style="stop-color:#ff7b7b"/>
+                            </linearGradient>
+                        </defs>
+                        <path class="gauge-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100"/>
+                        <path class="gauge-arc-fill" id="gaugeArc" d="M 20 100 A 80 80 0 0 1 180 100"/>
+                        <line class="gauge-needle" id="gaugeNeedle" x1="100" y1="100" x2="100" y2="25" stroke="#e6edf3" stroke-width="3" stroke-linecap="round"/>
+                        <circle cx="100" cy="100" r="5" fill="#e6edf3"/>
+                    </svg>
+                    <div class="gauge-labels">
+                        <span>放鬆</span>
+                        <span>中等</span>
+                        <span>高壓</span>
+                    </div>
+                    <div class="stress-result" id="stressResult">請先測量心率</div>
+                    <div class="stress-hint" id="stressHint">啟動攝像頭測量心率後，系統將估算您的壓力狀態。</div>
                 </div>
             </div>
 
             <!-- 心情日記 -->
-            <div class="card">
-                <h2>📝 心情日記</h2>
-                <p style="font-size: 0.9rem; color: #888; margin-bottom: 10px;">這次減壓後，你的感受是？</p>
-                <div class="mood-grid">
-                    <button class="mood-btn" onclick="selectMood('😊')">😊</button>
-                    <button class="mood-btn" onclick="selectMood('😐')">😐</button>
-                    <button class="mood-btn" onclick="selectMood('😌')">😌</button>
-                    <button class="mood-btn" onclick="selectMood('😴')">😴</button>
-                    <button class="mood-btn" onclick="selectMood('🤩')">🤩</button>
+            <div class="card fade-in">
+                <div class="card-title"><span class="icon">📝</span>心情日記</div>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;">這次減壓後，你的感受是？</p>
+                <div class="mood-row">
+                    <div class="mood-dot" onclick="selectMood('😊',this)">😊</div>
+                    <div class="mood-dot" onclick="selectMood('😐',this)">😐</div>
+                    <div class="mood-dot" onclick="selectMood('😌',this)">😌</div>
+                    <div class="mood-dot" onclick="selectMood('😴',this)">😴</div>
+                    <div class="mood-dot" onclick="selectMood('🤩',this)">🤩</div>
                 </div>
-                <textarea class="journal-entry" id="journalNote" placeholder="寫下此刻的感受..."></textarea>
-                <button class="btn btn-primary" style="margin-top: 10px; width: 100%;" onclick="saveJournal()">💾 記錄心情</button>
+                <textarea class="journal-input" id="journalNote" placeholder="寫下此刻的感受..."></textarea>
+                <button class="btn-main" style="margin-top:10px;width:100%;" onclick="saveJournal()">💾 記錄心情</button>
                 <div class="history-list" id="journalHistory"></div>
             </div>
         </div>
 
-        <footer style="text-align: center; padding: 30px 0; color: #666; font-size: 0.85rem;">
+        <footer>
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
-            <p style="margin-top: 5px;">心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
+            <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
         </footer>
     </div>
 
-    <script>
-    // ==================== 粒子背景 ====================
-    function createParticles() {
-        const container = document.getElementById('particles');
-        for (let i = 0; i < 30; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            p.style.left = Math.random() * 100 + '%';
-            p.style.animationDelay = Math.random() * 15 + 's';
-            p.style.animationDuration = (10 + Math.random() * 10) + 's';
-            container.appendChild(p);
+<script>
+// ==================== 粒子背景 ====================
+(function(){
+    const box = document.getElementById('particles');
+    for(let i=0;i<20;i++){
+        const p = document.createElement('div');
+        p.className = 'particle';
+        p.style.left = Math.random()*100 + '%';
+        p.style.animationDelay = Math.random()*15 + 's';
+        p.style.animationDuration = (12+Math.random()*10) + 's';
+        box.appendChild(p);
+    }
+})();
+
+// ==================== 呼吸引導 ====================
+let breathMode = 'box', breathRunning = false, breathTimer = null, breathStart = 0;
+const breathModes = {
+    '478': { phases: ['吸氣','屏息','吐氣'], durations: [4,7,8], name: '4-7-8 放鬆呼吸' },
+    'box': { phases: ['吸氣','屏息','吐氣','屏息'], durations: [4,4,4,4], name: '盒式呼吸' },
+    'coherent': { phases: ['吸氣','吐氣'], durations: [5,5], name: '共振呼吸 5-5' }
+};
+
+function setBreathMode(mode, el){
+    if(breathRunning) toggleBreathing();
+    breathMode = mode;
+    document.querySelectorAll('.breath-controls .chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('breathStatus').textContent = breathModes[mode].name + ' — 點擊開始';
+}
+
+function toggleBreathing(){
+    breathRunning ? stopBreathing() : startBreathing();
+}
+
+function startBreathing(){
+    breathRunning = true;
+    document.getElementById('breathToggle').textContent = '停止';
+    const ring = document.getElementById('breathRing');
+    const core = document.getElementById('breathCore');
+    const phaseEl = document.getElementById('breathPhase');
+    const secEl = document.getElementById('breathSec');
+    const bar = document.getElementById('breathBarFill');
+    const status = document.getElementById('breathStatus');
+    const cfg = breathModes[breathMode];
+    const totalCycle = cfg.durations.reduce((a,b)=>a+b,0);
+
+    let phaseIdx = 0;
+    let phaseStart = Date.now();
+
+    function tick(){
+        if(!breathRunning) return;
+        const now = Date.now();
+        const elapsed = (now - phaseStart) / 1000;
+        const dur = cfg.durations[phaseIdx];
+        const progress = Math.min(elapsed / dur, 1);
+
+        phaseEl.textContent = cfg.phases[phaseIdx];
+        secEl.textContent = Math.max(0, Math.ceil(dur - elapsed)) + '秒';
+        bar.style.width = (progress * 100) + '%';
+        status.textContent = cfg.name + ' — ' + cfg.phases[phaseIdx];
+
+        const isInhale = cfg.phases[phaseIdx] === '吸氣';
+        const isExhale = cfg.phases[phaseIdx] === '吐氣';
+        const scale = isInhale ? 1 + progress * 0.4 : isExhale ? 1.4 - progress * 0.4 : 1.4;
+        ring.style.transform = 'scale(' + scale + ')';
+        ring.style.opacity = 0.2 + progress * 0.3;
+        core.style.transform = 'scale(' + (0.9 + progress * 0.2) + ')';
+
+        if(elapsed >= dur){
+            phaseIdx = (phaseIdx + 1) % cfg.phases.length;
+            phaseStart = now;
+        }
+        breathTimer = requestAnimationFrame(tick);
+    }
+    tick();
+}
+
+function stopBreathing(){
+    breathRunning = false;
+    cancelAnimationFrame(breathTimer);
+    document.getElementById('breathToggle').textContent = '開始呼吸';
+    document.getElementById('breathPhase').textContent = '準備';
+    document.getElementById('breathSec').textContent = '';
+    document.getElementById('breathBarFill').style.width = '0%';
+    document.getElementById('breathRing').style.transform = 'scale(1)';
+    document.getElementById('breathStatus').textContent = '已停止';
+}
+
+// ==================== 鏡頭心跳 rPPG ====================
+const video = document.getElementById('videoElement');
+const camCanvas = document.getElementById('cameraCanvas');
+const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
+const sigCanvas = document.getElementById('signalGraph');
+const sigCtx = sigCanvas.getContext('2d');
+let camRunning = false, camStream = null, sigBuf = [], frameCnt = 0;
+
+async function toggleCamera(){
+    camRunning ? stopCamera() : await startCamera();
+}
+
+async function startCamera(){
+    try{
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user', width:320, height:240 } });
+        video.srcObject = camStream;
+        await video.play();
+        camRunning = true;
+        document.getElementById('camToggle').textContent = '關閉攝像頭';
+        document.getElementById('camPlaceholder').style.display = 'none';
+        document.getElementById('bpmDisplay').style.display = 'block';
+        sigCanvas.style.display = 'block';
+        video.style.display = 'block';
+        camCanvas.width = 320; camCanvas.height = 240;
+        sigCanvas.width = 260; sigCanvas.height = 60;
+        sigBuf = []; frameCnt = 0;
+        processFrame();
+    }catch(e){ alert('無法存取攝像頭：'+e.message); }
+}
+
+function stopCamera(){
+    camRunning = false;
+    if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
+    document.getElementById('camToggle').textContent = '啟動攝像頭';
+    document.getElementById('camPlaceholder').style.display = 'flex';
+    document.getElementById('bpmDisplay').style.display = 'none';
+    sigCanvas.style.display = 'none';
+    video.style.display = 'none';
+}
+
+function processFrame(){
+    if(!camRunning) return;
+    camCtx.drawImage(video, 0, 0, camCanvas.width, camCanvas.height);
+    const frame = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
+    const d = frame.data;
+    let gSum = 0, cnt = 0;
+    const cx = camCanvas.width/2, cy = camCanvas.height/2;
+    const rw = camCanvas.width*0.25, rh = camCanvas.height*0.25;
+    for(let y=cy-rh; y<cy+rh; y+=4){
+        for(let x=cx-rw; x<cx+rw; x+=4){
+            const i = (Math.floor(y)*camCanvas.width + Math.floor(x))*4;
+            gSum += d[i+1]; cnt++;
         }
     }
-    createParticles();
+    sigBuf.push(gSum/cnt);
+    if(sigBuf.length > 300) sigBuf.shift();
+    frameCnt++;
+    if(frameCnt % 90 === 0 && sigBuf.length > 120) calcBPM();
+    drawSig();
+    requestAnimationFrame(processFrame);
+}
 
-    // ==================== 呼吸引導 ====================
-    let breathMode = 'box';
-    let breathRunning = false;
-    let breathInterval = null;
+function calcBPM(){
+    const s = sigBuf.slice(-120);
+    const m = s.reduce((a,b)=>a+b,0)/s.length;
+    const th = m * 1.0015;
+    let peaks = 0;
+    for(let i=2;i<s.length-2;i++){
+        if(s[i]>s[i-1] && s[i]>s[i+1] && s[i]>s[i-2] && s[i]>s[i+2] && s[i]>th) peaks++;
+    }
+    const bpm = Math.round(peaks * (60/4) * 0.55);
+    const clamped = Math.max(50, Math.min(120, bpm));
+    document.getElementById('bpmValue').textContent = clamped;
+    updateGauge(clamped);
+}
 
-    const breathModes = {
-        '478': { inhale: 4, hold: 7, exhale: 8, name: '4-7-8 放鬆呼吸' },
-        'box': { inhale: 4, hold: 4, exhale: 4, hold2: 4, name: '盒式呼吸' },
-        'coherent': { inhale: 5, hold: 0, exhale: 5, name: '共振呼吸 (5-5)' }
+function drawSig(){
+    sigCtx.fillStyle = 'rgba(0,0,0,0.2)';
+    sigCtx.fillRect(0,0,sigCanvas.width,sigCanvas.height);
+    if(sigBuf.length < 2) return;
+    const s = sigBuf.slice(-200);
+    const min = Math.min(...s), max = Math.max(...s);
+    const r = max - min || 1;
+    sigCtx.strokeStyle = '#7dd3c0';
+    sigCtx.lineWidth = 1.5;
+    sigCtx.beginPath();
+    for(let i=0;i<s.length;i++){
+        const x = (i/s.length)*sigCanvas.width;
+        const y = sigCanvas.height - ((s[i]-min)/r)*sigCanvas.height*0.8 - sigCanvas.height*0.1;
+        i===0 ? sigCtx.moveTo(x,y) : sigCtx.lineTo(x,y);
+    }
+    sigCtx.stroke();
+}
+
+function updateGauge(bpm){
+    const needle = document.getElementById('gaugeNeedle');
+    const arc = document.getElementById('gaugeArc');
+    const result = document.getElementById('stressResult');
+    const hint = document.getElementById('stressHint');
+    let angle = -90, offset = 251, text = '', cls = '', tip = '';
+
+    if(bpm < 65){
+        angle = -70; offset = 50; text = '非常放鬆 🌿'; cls = 'relaxed';
+        tip = '心率很低，身心處於深度放鬆。繼續保持！';
+    }else if(bpm < 75){
+        angle = -35; offset = 120; text = '放鬆狀態 😌'; cls = 'relaxed';
+        tip = '心率平穩，壓力水平良好。';
+    }else if(bpm < 85){
+        angle = 5; offset = 180; text = '中等壓力 😐'; cls = 'moderate';
+        tip = '心率略高，建議多做幾輪深呼吸。';
+    }else if(bpm < 100){
+        angle = 45; offset = 220; text = '壓力偏高 😰'; cls = 'high';
+        tip = '偵測到較高壓力，建議搭配冥想計時器進行 10 分鐘冥想。';
+    }else{
+        angle = 80; offset = 250; text = '高度壓力 🚨'; cls = 'high';
+        tip = '壓力指數較高，請專注呼吸引導，讓身體慢慢平靜。';
+    }
+    needle.style.transform = 'rotate('+angle+'deg)';
+    arc.style.strokeDashoffset = offset;
+    result.textContent = text; result.className = 'stress-result '+cls;
+    hint.textContent = tip;
+}
+
+// ==================== 音樂（Web Audio API）====================
+const AC = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null, curSrc = null, gainNode = null, curSound = null;
+
+function initAudio(){
+    if(!audioCtx){ audioCtx = new AC(); gainNode = audioCtx.createGain(); gainNode.connect(audioCtx.destination); gainNode.gain.value = 0.3; }
+}
+
+function makeNoise(brown){
+    const sz = audioCtx.sampleRate * 3;
+    const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    let last = 0;
+    for(let i=0;i<sz;i++){
+        const w = Math.random()*2-1;
+        d[i] = brown ? (last + 0.02*w)/1.02 : w;
+        if(brown){ last = d[i]; d[i] *= 3.5; }
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    return src;
+}
+
+function makeOcean(){
+    const sz = audioCtx.sampleRate * 5;
+    const buf = audioCtx.createBuffer(1, sz, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<sz;i++){
+        const t = i/audioCtx.sampleRate;
+        d[i] = (Math.random()*2-1) * (Math.sin(2*Math.PI*0.08*t)*0.5+0.5) * 0.25;
+    }
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    return src;
+}
+
+function makeDrone(){
+    const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), o3 = audioCtx.createOscillator();
+    o1.frequency.value = 110; o2.frequency.value = 164.81; o3.frequency.value = 196;
+    o1.type = o2.type = 'sine'; o3.type = 'triangle';
+    const mix = audioCtx.createGain(); mix.gain.value = 0.15;
+    o1.connect(mix); o2.connect(mix); o3.connect(mix);
+    return { connect: d=>mix.connect(d), start: ()=>{o1.start();o2.start();o3.start();}, stop: ()=>{o1.stop();o2.stop();o3.stop();} };
+}
+
+function playSound(type, el){
+    initAudio(); stopAllSounds();
+    document.querySelectorAll('.sound-pill').forEach(p=>p.classList.remove('playing'));
+    el.classList.add('playing'); curSound = type;
+
+    if(type === 'rain'){
+        curSrc = makeNoise(true);
+        const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 700;
+        curSrc.connect(f); f.connect(gainNode); curSrc.start();
+    }else if(type === 'ocean'){
+        curSrc = makeOcean();
+        const f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500;
+        curSrc.connect(f); f.connect(gainNode); curSrc.start();
+    }else if(type === 'forest'){
+        curSrc = makeNoise(false);
+        const f = audioCtx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2500; f.Q.value = 0.5;
+        curSrc.connect(f); f.connect(gainNode); curSrc.start();
+    }else if(type === 'drone'){
+        curSrc = makeDrone(); curSrc.connect(gainNode); curSrc.start();
+    }
+}
+
+function stopAllSounds(){
+    if(curSrc){ try{curSrc.stop();}catch(e){} curSrc = null; }
+    document.querySelectorAll('.sound-pill').forEach(p=>p.classList.remove('playing'));
+    curSound = null;
+}
+
+function setVolume(v){ if(gainNode) gainNode.gain.value = v/100; }
+
+// ==================== 冥想計時器 ====================
+let timerDur = 300, timerRem = 300, timerRun = false, timerInt = null;
+
+function setTimer(min, el){
+    if(timerRun) toggleTimer();
+    timerDur = timerRem = min * 60;
+    updateTimer();
+    document.querySelectorAll('.timer-presets .chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+}
+
+function updateTimer(){
+    const m = String(Math.floor(timerRem/60)).padStart(2,'0');
+    const s = String(timerRem%60).padStart(2,'0');
+    document.getElementById('timerDigits').textContent = m+':'+s;
+    document.getElementById('timerProgress').style.width = (timerRem/timerDur*100) + '%';
+}
+
+function toggleTimer(){
+    if(timerRun){
+        clearInterval(timerInt); timerRun = false;
+        document.getElementById('timerToggle').textContent = '開始冥想';
+    }else{
+        timerRun = true;
+        document.getElementById('timerToggle').textContent = '暫停';
+        timerInt = setInterval(()=>{
+            timerRem--; updateTimer();
+            if(timerRem <= 0){
+                clearInterval(timerInt); timerRun = false;
+                document.getElementById('timerToggle').textContent = '開始冥想';
+                playBell(); alert('🧘 冥想完成！願你內心平靜。');
+                timerRem = timerDur; updateTimer();
+            }
+        }, 1000);
+    }
+}
+
+function playBell(){
+    initAudio();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 528; o.type = 'sine';
+    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 3);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 3);
+}
+
+// ==================== 心情日記 ====================
+let selMood = null;
+
+function selectMood(mood, el){
+    selMood = mood;
+    document.querySelectorAll('.mood-dot').forEach(d=>d.classList.remove('selected'));
+    el.classList.add('selected');
+}
+
+function saveJournal(){
+    const note = document.getElementById('journalNote').value;
+    if(!selMood && !note){ alert('請選擇心情或寫下感受'); return; }
+    const entry = {
+        time: new Date().toLocaleString('zh-TW',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),
+        mood: selMood || '😐', note: note || '無文字',
+        bpm: document.getElementById('bpmValue').textContent !== '--' ? document.getElementById('bpmValue').textContent + ' BPM' : '未測量'
     };
-
-    function setBreathMode(mode) {
-        breathMode = mode;
-        document.querySelectorAll('.breath-controls .btn:not(.btn-primary)').forEach(b => b.classList.remove('active'));
-        event.target.classList.add('active');
-        document.getElementById('breathStatus').textContent = breathModes[mode].name + ' — 點擊開始';
-    }
-
-    function toggleBreathing() {
-        if (breathRunning) {
-            stopBreathing();
-        } else {
-            startBreathing();
-        }
-    }
-
-    function startBreathing() {
-        breathRunning = true;
-        document.getElementById('breathToggle').textContent = '停止呼吸';
-        const circle = document.getElementById('breathCircle');
-        const text = document.getElementById('breathText');
-        const status = document.getElementById('breathStatus');
-        const mode = breathModes[breathMode];
-
-        let phase = 0;
-        const phases = breathMode === 'box' 
-            ? ['吸氣', '屏息', '吐氣', '屏息']
-            : breathMode === '478'
-            ? ['吸氣', '屏息', '吐氣']
-            : ['吸氣', '吐氣'];
-        const durations = breathMode === 'box'
-            ? [mode.inhale, mode.hold, mode.exhale, mode.hold2]
-            : breathMode === '478'
-            ? [mode.inhale, mode.hold, mode.exhale]
-            : [mode.inhale, mode.exhale];
-
-        function nextPhase() {
-            if (!breathRunning) return;
-            const currentPhase = phases[phase];
-            const duration = durations[phase] * 1000;
-
-            text.textContent = currentPhase;
-            status.textContent = `${mode.name} — ${currentPhase} (${durations[phase]}秒)`;
-
-            if (currentPhase === '吸氣') {
-                circle.style.transform = 'scale(1.5)';
-                circle.style.borderColor = 'rgba(168,237,234,0.8)';
-            } else if (currentPhase === '吐氣') {
-                circle.style.transform = 'scale(1)';
-                circle.style.borderColor = 'rgba(168,237,234,0.3)';
-            }
-
-            phase = (phase + 1) % phases.length;
-            breathInterval = setTimeout(nextPhase, duration);
-        }
-
-        nextPhase();
-    }
-
-    function stopBreathing() {
-        breathRunning = false;
-        clearTimeout(breathInterval);
-        document.getElementById('breathToggle').textContent = '開始呼吸';
-        document.getElementById('breathText').textContent = '準備';
-        document.getElementById('breathCircle').style.transform = 'scale(1)';
-        document.getElementById('breathStatus').textContent = '已停止';
-    }
-
-    // ==================== 鏡頭心跳偵測 (rPPG POS Method) ====================
-    // Reference: hschn58/rPPG — POS pulse extraction adapted for browser JS
-    let video = document.getElementById('videoElement');
-    let canvas = document.getElementById('cameraCanvas');
-    let ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let signalCanvas = document.getElementById('signalGraph');
-    let signalCtx = signalCanvas.getContext('2d');
-    let cameraRunning = false;
-    let stream = null;
-    
-    // rPPG signal buffers (RGB channels for POS method)
-    const MAX_BUFFER = 300; // ~10s @ 30fps
-    let rBuffer = [];
-    let gBuffer = [];
-    let bBuffer = [];
-    let posSignal = []; // filtered pulse signal for display
-    let frameCount = 0;
-    let lastBpm = null;
-    let bpmHistory = []; // rolling window for smoothing
-    
-    // POS algorithm constants
-    const WIN_LEN_SEC = 1.6;
-    const BAND_LOW = 0.7;  // Hz (~42 BPM)
-    const BAND_HIGH = 4.0; // Hz (~240 BPM)
-
-    async function toggleCamera() {
-        if (cameraRunning) {
-            stopCamera();
-        } else {
-            await startCamera();
-        }
-    }
-
-    async function startCamera() {
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'user', width: 320, height: 240, frameRate: { ideal: 30 } } 
-            });
-            video.srcObject = stream;
-            await video.play();
-
-            cameraRunning = true;
-            document.getElementById('cameraToggle').textContent = '關閉攝像頭';
-            document.getElementById('cameraPlaceholder').style.display = 'none';
-            document.getElementById('heartRateDisplay').style.display = 'block';
-            document.getElementById('signalGraph').style.display = 'block';
-            video.style.display = 'block';
-
-            canvas.width = 320;
-            canvas.height = 240;
-            signalCanvas.width = 300;
-            signalCanvas.height = 80;
-
-            rBuffer = []; gBuffer = []; bBuffer = []; posSignal = [];
-            bpmHistory = [];
-            frameCount = 0;
-            lastBpm = null;
-            processFrame();
-        } catch (err) {
-            alert('無法存取攝像頭：' + err.message);
-        }
-    }
-
-    function stopCamera() {
-        cameraRunning = false;
-        if (stream) {
-            stream.getTracks().forEach(t => t.stop());
-        }
-        document.getElementById('cameraToggle').textContent = '啟動攝像頭';
-        document.getElementById('cameraPlaceholder').style.display = 'block';
-        document.getElementById('heartRateDisplay').style.display = 'none';
-        document.getElementById('signalGraph').style.display = 'none';
-        video.style.display = 'none';
-    }
-
-    function extractFaceROI(data, w, h) {
-        // Simplified face ROI: center ellipse region (avoids hair/background)
-        // In production, use MediaPipe FaceMesh for precise skin mask
-        let rSum = 0, gSum = 0, bSum = 0, count = 0;
-        const cx = w / 2, cy = h * 0.45; // slightly above center (forehead/cheeks)
-        const rx = w * 0.25, ry = h * 0.3;
-        
-        // Sample every 2nd pixel in ROI for speed
-        for (let y = Math.floor(cy - ry); y < Math.floor(cy + ry); y += 2) {
-            for (let x = Math.floor(cx - rx); x < Math.floor(cx + rx); x += 2) {
-                // Ellipse check
-                if (((x-cx)/rx)**2 + ((y-cy)/ry)**2 <= 1) {
-                    const i = (y * w + x) * 4;
-                    rSum += data[i];
-                    gSum += data[i+1];
-                    bSum += data[i+2];
-                    count++;
-                }
-            }
-        }
-        if (count === 0) return null;
-        return { r: rSum/count, g: gSum/count, b: bSum/count };
-    }
-
-    function processFrame() {
-        if (!cameraRunning) return;
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        const roi = extractFaceROI(frame.data, canvas.width, canvas.height);
-        if (roi) {
-            rBuffer.push(roi.r);
-            gBuffer.push(roi.g);
-            bBuffer.push(roi.b);
-            
-            if (rBuffer.length > MAX_BUFFER) {
-                rBuffer.shift(); gBuffer.shift(); bBuffer.shift();
-            }
-        }
-
-        frameCount++;
-        
-        // Calculate BPM every 30 frames (~1s) once we have enough data
-        // POS needs at least WIN_LEN_SEC worth of frames
-        const minFrames = Math.ceil(WIN_LEN_SEC * 30);
-        if (frameCount % 30 === 0 && rBuffer.length >= minFrames) {
-            calculateHeartRatePOS();
-        }
-
-        drawSignalGraph();
-        requestAnimationFrame(processFrame);
-    }
-
-    // --- POS Algorithm (adapted from hschn58/rPPG Full_Stack/POS_method/POS_method.py) ---
-    function calculateHeartRatePOS() {
-        const N = rBuffer.length;
-        const fs = 30; // assumed fps
-        const winLen = Math.round(WIN_LEN_SEC * fs);
-        const overlap = Math.round(winLen * 0.5);
-        
-        // Convert to arrays for processing
-        const R = rBuffer.slice();
-        const G = gBuffer.slice();
-        const B = bBuffer.slice();
-        
-        // POS sliding window pulse extraction
-        let pulse = new Float32Array(N).fill(0);
-        let wsum = new Float32Array(N).fill(0);
-        
-        for (let start = 0; start <= N - winLen; start += overlap) {
-            const stop = start + winLen;
-            
-            // Normalize RGB in this window
-            let rMean = 0, gMean = 0, bMean = 0;
-            for (let i = start; i < stop; i++) { rMean += R[i]; gMean += G[i]; bMean += B[i]; }
-            rMean /= winLen; gMean /= winLen; bMean /= winLen;
-            
-            if (rMean < 1 || gMean < 1 || bMean < 1) continue; // skip dark frames
-            
-            // Chrominance signals X and Y
-            let xArr = [], yArr = [];
-            for (let i = start; i < stop; i++) {
-                const r = R[i] / rMean;
-                const g = G[i] / gMean;
-                const b = B[i] / bMean;
-                xArr.push(3*r - 2*g);
-                yArr.push(1.5*r + g - 1.5*b);
-            }
-            
-            // Alpha = std(X) / std(Y)
-            const xStd = std(xArr);
-            const yStd = std(yArr);
-            const alpha = xStd / (yStd + 1e-8);
-            
-            // S = X - alpha * Y
-            const hannWin = hanning(winLen);
-            for (let i = 0; i < winLen; i++) {
-                const s = xArr[i] - alpha * yArr[i];
-                pulse[start + i] += s * hannWin[i];
-                wsum[start + i] += hannWin[i];
-            }
-        }
-        
-        // Normalize overlap-add
-        for (let i = 0; i < N; i++) {
-            pulse[i] /= (wsum[i] + 1e-12);
-        }
-        
-        // Bandpass filter (simple moving average + detrend approximation)
-        const filtered = bandpassFilter(pulse, fs, BAND_LOW, BAND_HIGH);
-        posSignal = filtered.slice(-200); // keep last 200 samples for display
-        
-        // FFT peak detection on filtered signal
-        const bpm = fftPeakBPM(filtered, fs);
-        
-        if (bpm && bpm >= 45 && bpm <= 200) {
-            // Exponential moving average smoothing
-            bpmHistory.push(bpm);
-            if (bpmHistory.length > 5) bpmHistory.shift();
-            const smoothBpm = bpmHistory.reduce((a,b) => a+b, 0) / bpmHistory.length;
-            const displayBpm = Math.round(smoothBpm);
-            
-            lastBpm = displayBpm;
-            document.getElementById('bpmValue').textContent = displayBpm;
-            updateStressGauge(displayBpm);
-        }
-    }
-    
-    // --- DSP Helper Functions ---
-    function mean(arr) { return arr.reduce((a,b) => a+b, 0) / arr.length; }
-    function std(arr) {
-        const m = mean(arr);
-        return Math.sqrt(arr.reduce((s,v) => s + (v-m)**2, 0) / arr.length);
-    }
-    function hanning(n) {
-        const w = new Float32Array(n);
-        for (let i = 0; i < n; i++) w[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n - 1)));
-        return w;
-    }
-    
-    function bandpassFilter(signal, fs, lowHz, highHz) {
-        // Simple IIR bandpass (2nd order Butterworth approximation)
-        // Avoids heavy FFT for real-time; sufficient for HR range
-        const out = new Float32Array(signal.length);
-        const dt = 1/fs;
-        const rc_low = 1 / (2 * Math.PI * lowHz);
-        const rc_high = 1 / (2 * Math.PI * highHz);
-        const alpha_low = dt / (rc_low + dt);
-        const alpha_high = rc_high / (rc_high + dt);
-        
-        let hp = 0, lp = 0;
-        for (let i = 0; i < signal.length; i++) {
-            // High-pass (remove DC/drift)
-            hp = alpha_high * (hp + signal[i] - (i > 0 ? signal[i-1] : 0));
-            // Low-pass (remove HF noise)
-            lp = lp + alpha_low * (hp - lp);
-            out[i] = lp;
-        }
-        return out;
-    }
-    
-    function fftPeakBPM(signal, fs) {
-        // Radix-2 FFT on power-of-2 length segment
-        const N = Math.min(signal.length, 256); // cap for performance
-        const seg = signal.slice(-N);
-        
-        // Compute magnitude spectrum via DFT (optimized for small N)
-        // Only compute frequencies in [BAND_LOW, BAND_HIGH]
-        let maxMag = 0, peakFreq = 0;
-        const binHz = fs / N;
-        const lowBin = Math.ceil(BAND_LOW / binHz);
-        const highBin = Math.floor(BAND_HIGH / binHz);
-        
-        for (let k = lowBin; k <= highBin; k++) {
-            let re = 0, im = 0;
-            for (let n = 0; n < N; n++) {
-                const angle = -2 * Math.PI * k * n / N;
-                re += seg[n] * Math.cos(angle);
-                im += seg[n] * Math.sin(angle);
-            }
-            const mag = re*re + im*im;
-            if (mag > maxMag) {
-                maxMag = mag;
-                peakFreq = k * binHz;
-            }
-        }
-        
-        return peakFreq > 0 ? peakFreq * 60 : null;
-    }
-
-    function drawSignalGraph() {
-        signalCtx.fillStyle = 'rgba(0,0,0,0.3)';
-        signalCtx.fillRect(0, 0, signalCanvas.width, signalCanvas.height);
-
-        if (posSignal.length < 2) return;
-
-        const signal = posSignal;
-        const min = Math.min(...signal);
-        const max = Math.max(...signal);
-        const range = max - min || 1;
-
-        signalCtx.strokeStyle = '#4ecdc4';
-        signalCtx.lineWidth = 2;
-        signalCtx.beginPath();
-        for (let i = 0; i < signal.length; i++) {
-            const x = (i / signal.length) * signalCanvas.width;
-            const y = signalCanvas.height - ((signal[i] - min) / range) * signalCanvas.height * 0.8 - signalCanvas.height * 0.1;
-            if (i === 0) signalCtx.moveTo(x, y);
-            else signalCtx.lineTo(x, y);
-        }
-        signalCtx.stroke();
-        
-        // Draw BPM label on graph
-        if (lastBpm) {
-            signalCtx.fillStyle = '#ff6b6b';
-            signalCtx.font = 'bold 14px sans-serif';
-            signalCtx.fillText(`${lastBpm} BPM`, 10, 20);
-        }
-    }
-
-    function updateStressGauge(bpm) {
-        const needle = document.getElementById('gaugeNeedle');
-        const value = document.getElementById('stressValue');
-        const tip = document.getElementById('stressTip');
-
-        // 簡易壓力估算：假設靜息心率 60-100
-        let angle = -90;
-        let status = '';
-        let statusClass = '';
-
-        if (bpm < 65) {
-            angle = -60;
-            status = '非常放鬆 🌿';
-            statusClass = 'relaxed';
-            tip.textContent = '你的心率很低，表示身心處於深度放鬆狀態。繼續保持！';
-        } else if (bpm < 75) {
-            angle = -30;
-            status = '放鬆狀態 😌';
-            statusClass = 'relaxed';
-            tip.textContent = '你的心率平穩，壓力水平良好。';
-        } else if (bpm < 85) {
-            angle = 0;
-            status = '中等壓力 😐';
-            statusClass = 'moderate';
-            tip.textContent = '你的心率略高，建議多做幾輪深呼吸練習。';
-        } else if (bpm < 100) {
-            angle = 45;
-            status = '壓力偏高 😰';
-            statusClass = 'high';
-            tip.textContent = '偵測到較高壓力水平，建議搭配冥想計時器進行 10 分鐘冥想。';
-        } else {
-            angle = 85;
-            status = '高度壓力 🚨';
-            statusClass = 'high';
-            tip.textContent = '壓力指數較高，請專注於呼吸引導，讓身體慢慢平靜下來。';
-        }
-
-        needle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
-        value.textContent = status;
-        value.className = 'stress-value ' + statusClass;
-    }
-
-    // ==================== 放鬆音樂 (Web Audio API) ====================
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    let audioCtx = null;
-    let currentSource = null;
-    let gainNode = null;
-    let currentSound = null;
-
-    function initAudio() {
-        if (!audioCtx) {
-            audioCtx = new AudioContext();
-            gainNode = audioCtx.createGain();
-            gainNode.connect(audioCtx.destination);
-            gainNode.gain.value = 0.3;
-        }
-    }
-
-    function createNoise() {
-        const bufferSize = audioCtx.sampleRate * 2;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        noise.loop = true;
-        return noise;
-    }
-
-    function createBrownNoise() {
-        const bufferSize = audioCtx.sampleRate * 2;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            data[i] = (lastOut + (0.02 * white)) / 1.02;
-            lastOut = data[i];
-            data[i] *= 3.5;
-        }
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        noise.loop = true;
-        return noise;
-    }
-
-    function createOceanNoise() {
-        const bufferSize = audioCtx.sampleRate * 4;
-        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            const t = i / audioCtx.sampleRate;
-            const wave = Math.sin(2 * Math.PI * 0.1 * t) * 0.5 + 0.5;
-            const white = Math.random() * 2 - 1;
-            data[i] = white * wave * 0.3;
-        }
-        const noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
-        noise.loop = true;
-        return noise;
-    }
-
-    function createDrone() {
-        const osc1 = audioCtx.createOscillator();
-        const osc2 = audioCtx.createOscillator();
-        const osc3 = audioCtx.createOscillator();
-        osc1.frequency.value = 110; // A2
-        osc2.frequency.value = 164.81; // E3
-        osc3.frequency.value = 196; // G3
-        osc1.type = 'sine';
-        osc2.type = 'sine';
-        osc3.type = 'triangle';
-
-        const merger = audioCtx.createChannelMerger(2);
-        osc1.connect(merger);
-        osc2.connect(merger);
-        osc3.connect(merger);
-
-        return { connect: (dest) => merger.connect(dest), start: () => { osc1.start(); osc2.start(); osc3.start(); }, stop: () => { osc1.stop(); osc2.stop(); osc3.stop(); } };
-    }
-
-    function playSound(type) {
-        initAudio();
-        stopAllSounds();
-
-        document.querySelectorAll('.sound-btn').forEach(b => b.classList.remove('playing'));
-        event.currentTarget.classList.add('playing');
-        currentSound = type;
-
-        if (type === 'rain') {
-            currentSource = createBrownNoise();
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 800;
-            currentSource.connect(filter);
-            filter.connect(gainNode);
-            currentSource.start();
-        } else if (type === 'ocean') {
-            currentSource = createOceanNoise();
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 600;
-            currentSource.connect(filter);
-            filter.connect(gainNode);
-            currentSource.start();
-        } else if (type === 'forest') {
-            currentSource = createNoise();
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'bandpass';
-            filter.frequency.value = 2000;
-            filter.Q.value = 0.5;
-            currentSource.connect(filter);
-            filter.connect(gainNode);
-            currentSource.start();
-        } else if (type === 'drone') {
-            currentSource = createDrone();
-            currentSource.connect(gainNode);
-            currentSource.start();
-        }
-    }
-
-    function stopAllSounds() {
-        if (currentSource) {
-            try { currentSource.stop(); } catch(e) {}
-            currentSource = null;
-        }
-        document.querySelectorAll('.sound-btn').forEach(b => b.classList.remove('playing'));
-        currentSound = null;
-    }
-
-    function setVolume(val) {
-        if (gainNode) {
-            gainNode.gain.value = val / 100;
-        }
-    }
-
-    // ==================== 冥想計時器 ====================
-    let timerDuration = 5 * 60;
-    let timerRemaining = 5 * 60;
-    let timerRunning = false;
-    let timerInterval = null;
-
-    function setTimer(minutes) {
-        if (timerRunning) toggleTimer();
-        timerDuration = minutes * 60;
-        timerRemaining = timerDuration;
-        updateTimerDisplay();
-        document.querySelectorAll('.timer-presets .btn').forEach(b => b.classList.remove('active'));
-        event.target.classList.add('active');
-    }
-
-    function updateTimerDisplay() {
-        const m = Math.floor(timerRemaining / 60).toString().padStart(2, '0');
-        const s = (timerRemaining % 60).toString().padStart(2, '0');
-        document.getElementById('timerDisplay').textContent = `${m}:${s}`;
-        const pct = (timerRemaining / timerDuration) * 100;
-        document.getElementById('timerBarFill').style.width = pct + '%';
-    }
-
-    function toggleTimer() {
-        if (timerRunning) {
-            clearInterval(timerInterval);
-            timerRunning = false;
-            document.getElementById('timerToggle').textContent = '開始冥想';
-        } else {
-            timerRunning = true;
-            document.getElementById('timerToggle').textContent = '暫停';
-            timerInterval = setInterval(() => {
-                timerRemaining--;
-                updateTimerDisplay();
-                if (timerRemaining <= 0) {
-                    clearInterval(timerInterval);
-                    timerRunning = false;
-                    document.getElementById('timerToggle').textContent = '開始冥想';
-                    // 播放結束鈴聲
-                    playBell();
-                    alert('🧘 冥想完成！願你內心平靜。');
-                    timerRemaining = timerDuration;
-                    updateTimerDisplay();
-                }
-            }, 1000);
-        }
-    }
-
-    function playBell() {
-        initAudio();
-        const osc = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        osc.frequency.value = 528; // 治療頻率
-        osc.type = 'sine';
-        g.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 3);
-        osc.connect(g);
-        g.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 3);
-    }
-
-    // ==================== 心情日記 ====================
-    let selectedMood = null;
-
-    function selectMood(mood) {
-        selectedMood = mood;
-        document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
-        event.target.classList.add('selected');
-    }
-
-    function saveJournal() {
-        const note = document.getElementById('journalNote').value;
-        if (!selectedMood && !note) {
-            alert('請選擇一個心情或寫下感受');
-            return;
-        }
-
-        const entry = {
-            time: new Date().toLocaleString('zh-TW'),
-            mood: selectedMood || '😐',
-            note: note || '無文字記錄',
-            bpm: document.getElementById('bpmValue').textContent !== '--' 
-                ? document.getElementById('bpmValue').textContent + ' BPM' 
-                : '未測量'
-        };
-
-        let history = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
-        history.unshift(entry);
-        if (history.length > 20) history = history.slice(0, 20);
-        localStorage.setItem('pressureJournal', JSON.stringify(history));
-
-        renderHistory();
-        document.getElementById('journalNote').value = '';
-        document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
-        selectedMood = null;
-        alert('✅ 已記錄心情！');
-    }
-
-    function renderHistory() {
-        const history = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
-        const container = document.getElementById('journalHistory');
-        container.innerHTML = history.map(h => `
-            <div class="history-item">
-                <strong>${h.time}</strong> ${h.mood} | ${h.bpm}
-                ${h.note ? '<br>' + h.note : ''}
-            </div>
-        `).join('');
-    }
-
+    let h = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
+    h.unshift(entry); if(h.length > 15) h = h.slice(0,15);
+    localStorage.setItem('pressureJournal', JSON.stringify(h));
     renderHistory();
-    </script>
+    document.getElementById('journalNote').value = '';
+    document.querySelectorAll('.mood-dot').forEach(d=>d.classList.remove('selected'));
+    selMood = null;
+}
+
+function renderHistory(){
+    const h = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
+    document.getElementById('journalHistory').innerHTML = h.map(e=>`
+        <div class="history-item">
+            <time>${e.time}</time> ${e.mood} · ${e.bpm}<br>
+            ${e.note !== '無文字' ? e.note : ''}
+        </div>
+    `).join('');
+}
+renderHistory();
+</script>
 </body>
 </html>
