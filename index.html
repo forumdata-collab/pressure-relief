@@ -2,7 +2,10 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#7dd3c0">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon-192.png">
     <title>🧘 釋放壓力空間</title>
     <style>
         :root {
@@ -21,6 +24,24 @@
             --shadow-hover: 0 8px 32px rgba(0,0,0,0.5);
             --radius: 16px;
             --radius-sm: 10px;
+        }
+
+        body.light {
+            --bg-dark: #f0f7f5;
+            --bg-card: rgba(255,255,255,0.85);
+            --bg-card-hover: rgba(255,255,255,0.95);
+            --text: #1a2b28;
+            --text-muted: #5a6b68;
+            --border: rgba(45,150,120,0.12);
+            --shadow: 0 4px 24px rgba(40,100,90,0.1);
+            --shadow-hover: 0 8px 32px rgba(40,100,90,0.18);
+        }
+        body.light .bg-layer {
+            background:
+                radial-gradient(ellipse at 20% 20%, rgba(125,211,192,0.2) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(244,166,205,0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(125,211,192,0.08) 0%, transparent 70%),
+                var(--bg-dark);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -635,9 +656,13 @@
     <div class="particles" id="particles"></div>
 
     <div class="container">
-        <header class="fade-in">
-            <h1>🧘 釋放壓力空間</h1>
-            <p>深呼吸，讓身心回歸平靜</p>
+        <header class="fade-in" style="position:relative;">
+            <div style="position:absolute;top:0;right:0;display:flex;gap:6px;">
+                <span class="chip" id="langToggle" onclick="toggleLang()" style="padding:4px 10px;">EN</span>
+                <span class="chip" id="themeToggle" onclick="toggleTheme()">☀️</span>
+            </div>
+            <h1 data-i18n="title">🧘 釋放壓力空間</h1>
+            <p data-i18n="subtitle">深呼吸，讓身心回歸平靜</p>
         </header>
 
         <div class="grid">
@@ -765,7 +790,10 @@
                     <div class="mood-dot" onclick="selectMood('🤩',this)">🤩</div>
                 </div>
                 <textarea class="journal-input" id="journalNote" placeholder="寫下此刻的感受..."></textarea>
-                <button class="btn-main" style="margin-top:10px;width:100%;" onclick="saveJournal()">💾 記錄心情</button>
+                <div style="display:flex;gap:8px;margin-top:10px;">
+                    <button class="btn-main" style="flex:1;" onclick="saveJournal()">💾 記錄心情</button>
+                    <button class="btn-main" style="background:rgba(125,211,192,0.15);color:var(--primary);box-shadow:none;" onclick="exportJournal()">📥 匯出</button>
+                </div>
                 <div class="history-list" id="journalHistory"></div>
             </div>
         </div>
@@ -782,6 +810,7 @@
         </footer>
     </div>
 
+<script src="wasm/face_mesh.js" defer></script>
 <script>
 // ==================== 粒子背景 ====================
 (function(){
@@ -887,7 +916,8 @@ let faceMeshInstance = null, faceMeshReady = false, latestLandmarks = null;
 const FACE_SKIN_IDS = [10,151,9,8,168,6,197,195,5,4,1,19,94,2,164,0,13,14,17,37,39,40,185,61,146,91,181,84,17,314,405,321,375,291,132,58,172,136,150,149,176,148,152,377,400,378,379,365,397,288,361,281,424,431,389,355,454,323,362,398,384,385,386,387,388,46,53,52,65,55,193,245,128,114,188,122];
 
 async function initFaceMesh(){
-    if(typeof FaceMesh === 'undefined') return;
+    if(faceMeshReady) return;
+    if(typeof FaceMesh === 'undefined'){ console.warn('FaceMesh not loaded'); return; }
     try{
         faceMeshInstance = new FaceMesh({locateFile: f => `wasm/${f}`});
         faceMeshInstance.setOptions({maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
@@ -998,6 +1028,7 @@ function calcBPM(){
     const clamped = Math.max(50, Math.min(120, bpm));
     document.getElementById('bpmValue').textContent = clamped;
     updateGauge(clamped);
+    recordBPM(clamped); // for trend line + session summary
 }
 
 function drawSig(){
@@ -1016,6 +1047,25 @@ function drawSig(){
         i===0 ? sigCtx.moveTo(x,y) : sigCtx.lineTo(x,y);
     }
     sigCtx.stroke();
+
+    // BPM trend line (pink overlay, right 40% of graph)
+    if(bpmHistoryLog.length >= 2){
+        const trend = bpmHistoryLog.slice(-20);
+        const bmin = Math.min(...trend.map(p=>p.bpm)) - 2;
+        const bmax = Math.max(...trend.map(p=>p.bpm)) + 2;
+        const br = bmax - bmin || 1;
+        sigCtx.strokeStyle = '#f4a6cd';
+        sigCtx.lineWidth = 2;
+        sigCtx.setLineDash([4,3]);
+        sigCtx.beginPath();
+        trend.forEach((p,i) => {
+            const x = sigCanvas.width*0.6 + (i/(trend.length-1))*sigCanvas.width*0.4;
+            const y = sigCanvas.height - ((p.bpm-bmin)/br)*sigCanvas.height*0.7 - sigCanvas.height*0.15;
+            i===0 ? sigCtx.moveTo(x,y) : sigCtx.lineTo(x,y);
+        });
+        sigCtx.stroke();
+        sigCtx.setLineDash([]);
+    }
 }
 
 function updateGauge(bpm){
@@ -1205,6 +1255,113 @@ function renderHistory(){
     `).join('');
 }
 renderHistory();
+
+// ==================== Journal CSV Export ====================
+function exportJournal(){
+    const h = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
+    if(!h.length){ alert('日記係空的'); return; }
+    let csv = '\uFEFF時間,心情,BPM,備註\n'; // BOM for Excel
+    h.forEach(e => {
+        const note = (e.note||'').replace(/"/g,'""');
+        csv += `"${e.time}","${e.mood}","${e.bpm}","${note}"\n`;
+    });
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'pressure-journal-' + new Date().toISOString().slice(0,10) + '.csv';
+    a.click();
+}
+
+// ==================== BPM History Trend ====================
+const bpmHistoryLog = []; // {time, bpm}
+function recordBPM(bpm){
+    bpmHistoryLog.push({t: Date.now(), bpm});
+    if(bpmHistoryLog.length > 60) bpmHistoryLog.shift(); // keep last ~5min
+}
+
+// ==================== Session Summary ====================
+let sessionBpmStart = null;
+function getSessionSummary(){
+    if(bpmHistoryLog.length < 2) return null;
+    const first = bpmHistoryLog[0].bpm, last = bpmHistoryLog[bpmHistoryLog.length-1].bpm;
+    const avg = Math.round(bpmHistoryLog.reduce((a,b)=>a+b.bpm,0)/bpmHistoryLog.length);
+    const delta = last - first;
+    return {first, last, avg, delta};
+}
+
+// ==================== PWA Service Worker ====================
+if('serviceWorker' in navigator){
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+}
+
+// ==================== Theme Toggle ====================
+function toggleTheme(){
+    document.body.classList.toggle('light');
+    const light = document.body.classList.contains('light');
+    document.getElementById('themeToggle').textContent = light ? '🌙' : '☀️';
+    localStorage.setItem('prTheme', light ? 'light' : 'dark');
+}
+if(localStorage.getItem('prTheme') === 'light'){
+    document.body.classList.add('light');
+    document.getElementById('themeToggle').textContent = '🌙';
+}
+
+// ==================== i18n ====================
+const I18N = {
+    zh: {
+        title: '🧘 釋放壓力空間', subtitle: '深呼吸，讓身心回歸平靜',
+        breath: '🫁 呼吸引導', start: '開始呼吸', stop: '停止',
+        camera: '📷 鏡頭心跳偵測', camStart: '啟動攝像頭', camStop: '關閉攝像頭',
+        music: '🎵 放鬆音樂', timer: '⏱️ 冥想計時器',
+        gauge: '📊 壓力指數', journal: '📝 心情日記',
+        save: '💾 記錄心情', exportBtn: '📥 匯出'
+    },
+    en: {
+        title: '🧘 Pressure Relief', subtitle: 'Breathe deep, find your calm',
+        breath: '🫁 Breathing Guide', start: 'Start', stop: 'Stop',
+        camera: '📷 Heart Rate (rPPG)', camStart: 'Start Camera', camStop: 'Stop Camera',
+        music: '🎵 Relaxing Sounds', timer: '⏱️ Meditation Timer',
+        gauge: '📊 Stress Level', journal: '📝 Mood Journal',
+        save: '💾 Save Entry', exportBtn: '📥 Export'
+    }
+};
+let currentLang = localStorage.getItem('prLang') || 'zh';
+
+function applyLang(){
+    const t = I18N[currentLang];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const k = el.getAttribute('data-i18n');
+        if(t[k]) el.textContent = t[k];
+    });
+    // Buttons without data-i18n (dynamic text)
+    const bt = document.getElementById('breathToggle');
+    if(bt && !breathRunning) bt.textContent = t.start;
+    const ct = document.getElementById('camToggle');
+    if(ct) ct.textContent = camRunning ? t.camStop : t.camStart;
+    document.getElementById('langToggle').textContent = currentLang === 'zh' ? 'EN' : '中';
+}
+
+function toggleLang(){
+    currentLang = currentLang === 'zh' ? 'en' : 'zh';
+    localStorage.setItem('prLang', currentLang);
+    applyLang();
+}
+applyLang();
+
+// ==================== Session Summary on Meditation End ====================
+const _origPlayBell = playBell;
+playBell = function(){
+    _origPlayBell();
+    const s = getSessionSummary();
+    if(s){
+        const dir = s.delta <= -3 ? '下降' : s.delta >= 3 ? '上升' : '持平';
+        alert(`🧘 冥想完成！\n\n本次心率：平均 ${s.avg} BPM（${s.first} → ${s.last}，${dir}${Math.abs(s.delta)>0 ? ' '+Math.abs(s.delta) : ''} BPM）`);
+    } else {
+        alert('🧘 冥想完成！願你內心平靜。');
+    }
+};
 </script>
 </body>
 </html>
