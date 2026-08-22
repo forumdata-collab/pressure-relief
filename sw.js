@@ -1,5 +1,5 @@
 // Pressure Relief Service Worker
-const CACHE = 'pr-v1';
+const CACHE = 'pr-v2';
 const ASSETS = [
     './',
     './index.html',
@@ -32,6 +32,7 @@ self.addEventListener('fetch', e => {
                     const clone = resp.clone();
                     caches.open(CACHE).then(c => c.put(e.request, clone));
                 }
+                // Never serve a stale HTML shell from cache when we're online
                 return resp;
             }).catch(() => hit)
         )

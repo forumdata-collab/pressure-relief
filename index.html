@@ -1521,8 +1521,13 @@ function getSessionSummary(){
 // ==================== PWA Service Worker ====================
 if('serviceWorker' in navigator){
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(()=>{});
+        navigator.serviceWorker.register('./sw.js').then(reg=>{
+            reg.update(); // check for newer SW immediately on load
+            setInterval(()=>reg.update(), 60*60*1000);
+        }).catch(()=>{});
     });
+    // Activate a waiting SW (with new cache) right away instead of waiting for all tabs to close
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>location.reload());
 }
 
 // ==================== Theme Toggle ====================
