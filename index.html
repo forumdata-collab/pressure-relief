@@ -736,8 +736,12 @@
                             <div style="font-size:1.1rem;font-weight:700;" id="vWork">--<span style="font-size:0.7rem;color:var(--text-muted);"> dB</span></div>
                         </div>
                     </div>
-                    <div style="margin-top:12px;">
+                    <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
                         <button class="btn-main" id="camToggle" onclick="toggleCamera()">啟動攝像頭</button>
+                        <button class="btn-main" id="fingerToggle" onclick="toggleFinger()">👆 手指測量</button>
+                    </div>
+                    <div class="cam-tip" style="margin-top:8px;">
+                        👆 手指模式：指尖完全遮住後鏡頭，開手電筒照穿手指（僅限支援手電筒嘅 Android 瀏覽器）
                     </div>
                     <div class="cam-tip">
                         💡 請在穩定光源下保持面部靜止。偵測結果僅供參考，不能取代醫療設備。血壓偵測因準確度限制暫不實作。
@@ -830,7 +834,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v20 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v21 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -953,14 +957,32 @@ const ROI = {
 };
 
 async function toggleCamera(){ camRunning ? stopCamera() : await startCamera(); }
+async function toggleFinger(){ camRunning && fingerMode ? stopCamera() : await startCamera('environment'); }
 
-async function startCamera(){
+let fingerMode = false;
+
+async function startCamera(facing){
     try{
-        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'user', width:240, height:320, aspectRatio:{ideal:0.75} } });
+        if(camRunning) stopCamera();          // one stream at a time
+        fingerMode = facing === 'environment';
+        camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width:240, height:320, aspectRatio:{ideal:0.75} } });
         video.srcObject = camStream;
         await video.play();
+        if(fingerMode){
+            // Torch needed for transmission PPG. Android Chrome supports it; iOS Safari doesn't.
+            const track = camStream.getVideoTracks()[0];
+            const caps = track.getCapabilities ? track.getCapabilities() : {};
+            if(!caps.torch){
+                stopCamera();
+                alert('此瀏覽器唔支援手電筒控制（iOS Safari 不支援）。請用 Android Chrome。');
+                return;
+            }
+            try{ await track.applyConstraints({ advanced: [{ torch: true }] }); }
+            catch(e){ stopCamera(); alert('無法開啟手電筒：'+e.message); return; }
+        }
         camRunning = true;
         document.getElementById('camToggle').textContent = '關閉攝像頭';
+        document.getElementById('fingerToggle').textContent = fingerMode ? '停止手指測量' : '👆 手指測量';
         document.getElementById('camPlaceholder').style.display = 'none';
         document.getElementById('bpmDisplay').style.display = 'block';
         sigCanvas.style.display = 'block';
@@ -969,13 +991,19 @@ async function startCamera(){
         RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.ibiBuf = []; RPPG.lastCalc = 0;
         if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
         else requestAnimationFrame(loop);
-    }catch(e){ alert('無法存取攝像頭：'+e.message); }
+    }catch(e){ fingerMode = false; alert('無法存取攝像頭：'+e.message); }
 }
 
 function stopCamera(){
+    if(fingerMode && camStream){
+        const track = camStream.getVideoTracks()[0];
+        track.applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{});
+    }
+    fingerMode = false;
     camRunning = false;
     if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
     document.getElementById('camToggle').textContent = '啟動攝像頭';
+    document.getElementById('fingerToggle').textContent = '👆 手指測量';
     document.getElementById('camPlaceholder').style.display = 'flex';
     document.getElementById('bpmDisplay').style.display = 'none';
     sigCanvas.style.display = 'none';
@@ -1011,14 +1039,22 @@ function processFrame(){
     procCtx.drawImage(video, (vw-sw)/2, (vh-sh)/2, sw, sh, 0, 0, cw, ch);
     const d = procCtx.getImageData(0, 0, cw, ch).data, w = cw, h = ch;
 
-    const f = _roiMean(d,w,h,ROI.f), l = _roiMean(d,w,h,ROI.l), rr = _roiMean(d,w,h,ROI.r);
-    if(f && l && rr){
-        RPPG.roiBuf.push({f, l, r:rr, t: performance.now()});
-        // Cap buffer by TIME span, not sample count — at 60fps a 300-sample cap
-        // is only 5s and the 8s display gate can NEVER pass ("stuck at 3s" bug).
-        const b = RPPG.roiBuf, need = RPPG.WIN_SEC*0.8 + 2;  // gate span + headroom
-        while(b.length > 2 && (b[b.length-1].t - b[0].t)/1000 > need) b.shift();
+    if(fingerMode){
+        // Transmission PPG: LED-lit fingertip fills frame → sample center region,
+        // push same mean into all 3 slots so the GRGB pipeline works unchanged.
+        const v = _roiMean(d,w,h,[0.5,0.5,0.35,0.35]);
+        if(v){ RPPG.roiBuf.push({f:v, l:v, r:v, t: performance.now()}); }
+    } else {
+        const f = _roiMean(d,w,h,ROI.f), l = _roiMean(d,w,h,ROI.l), rr = _roiMean(d,w,h,ROI.r);
+        if(f && l && rr){
+            RPPG.roiBuf.push({f, l, r:rr, t: performance.now()});
+        }
     }
+
+    // Cap buffer by TIME span, not sample count — at 60fps a 300-sample cap
+    // is only 5s and the 8s display gate can NEVER pass ("stuck at 3s" bug).
+    const b = RPPG.roiBuf, need = RPPG.WIN_SEC*0.8 + 2;  // gate span + headroom
+    while(b.length > 2 && (b[b.length-1].t - b[0].t)/1000 > need) b.shift();
 
     // Time-based gate: sample counts vary with real fps (FaceMesh can drop rAF to ~15fps),
     // so require 8s of wall-clock coverage in the buffer instead of a fixed sample count.
