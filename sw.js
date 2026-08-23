@@ -1,5 +1,5 @@
 // Pressure Relief Service Worker
-const CACHE = 'pr-v24';
+const CACHE = 'pr-v25';
 // Bump CACHE together with the footer version string in index.html on every HTML change.
 const ASSETS = [
     './',
@@ -23,17 +23,28 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-    // Cache-first for same-origin; network fallback
+    // Network-first for HTML (users always get the latest build when online;
+    // cache only as offline fallback). Cache-first for same-origin assets.
     if (e.request.method !== 'GET') return;
+    const url = new URL(e.request.url);
+    const isHTML = e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/';
+    if (isHTML) {
+        e.respondWith(
+            fetch(e.request).then(resp => {
+                const clone = resp.clone();
+                caches.open(CACHE).then(c => c.put(e.request, clone));
+                return resp;
+            }).catch(() => caches.match(e.request))
+        );
+        return;
+    }
     e.respondWith(
         caches.match(e.request).then(hit =>
             hit || fetch(e.request).then(resp => {
-                // Runtime-cache wasm assets + html
-                if (resp.ok && (e.request.url.includes('/wasm/') || e.request.url.endsWith('.html') || e.request.url === location.origin + '/')) {
+                if (resp.ok && url.pathname.includes('/wasm/')) {
                     const clone = resp.clone();
                     caches.open(CACHE).then(c => c.put(e.request, clone));
                 }
-                // Never serve a stale HTML shell from cache when we're online
                 return resp;
             }).catch(() => hit)
         )
