@@ -846,7 +846,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v29 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v30 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -1033,7 +1033,7 @@ function stopCamera(){
 // ==================== rPPG: GRGB, fixed 3-ROI, downscaled ====================
 // GRGB (Casal et al. 2023): rPPG(t)=G/R+G/B — light-invariant, motion-robust.
 const RPPG = {
-    WIN_SEC: 12, BAND_LOW: 0.9, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s; LOW=0.9Hz(54bpm) floors out resp-harmonic/AE artifact locks (~50bpm)
+    WIN_SEC: 12, BAND_LOW: 1.0, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s; LOW=1.0Hz(60bpm) — kills the 45-59bpm resp-harmonic/AE artifact zone entirely (face "stuck ~50" root)
     roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: [], ibiBuf: []
 };
 let displayBpm = null;
@@ -1116,12 +1116,13 @@ function calcBPM(){
     const {bpm, snr} = fftPeak(filt, fs, RPPG.BAND_LOW, RPPG.BAND_HIGH);
     if(!bpm || bpm < 45 || bpm > 160) return;
 
-    // ACF cross-check: autocorrelation is immune to the spectral artifact locks
-    // (resp harmonics / sub-harmonics) that drag weak face-mode FFT peaks low.
-    // Agree (≤12 apart) → average; disagree → trust ACF.
+    // ACF cross-check: autocorrelation is immune to spectral harmonic locks,
+    // BUT it has its own failure mode — a strong sub-band artifact gets the
+    // highest autocorr. So: override FFT only when ACF is CONFIDENT (r≥0.3);
+    // agree → average; low-confidence disagreement → keep FFT.
     let finalBpm = bpm;
-    const acf = acfBpm(filt, fs, 50, 150);
-    if (acf && acf.bpm) {
+    const acf = acfBpm(filt, fs, 55, 150);
+    if (acf && acf.bpm && acf.r >= 0.3) {
         if (Math.abs(acf.bpm - bpm) <= 12) finalBpm = Math.round((acf.bpm + bpm) / 2);
         else finalBpm = Math.round(acf.bpm);
     }

@@ -8,7 +8,7 @@
 
   // ---- GRGB constants (rPPG band of interest) ----
   // LOW=0.9Hz floors out sub-54bpm artifact zone (resp harmonics / camera AE wobble).
-  const BAND_LOW = 0.9, BAND_HIGH = 3.0, WIN_SEC = 12;
+  const BAND_LOW = 1.0, BAND_HIGH = 3.0, WIN_SEC = 12;
 
   // Mean RGB of an elliptical region (fractions of canvas). Stride 2 px.
   function _roiMean(d, w, h, [cx, cy, rx, ry]) {
