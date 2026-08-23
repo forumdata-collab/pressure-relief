@@ -54,6 +54,20 @@ function run() {
     const { bpm } = m.fftPeak(f, fsIbi, 0.13, 0.5);
     assert(bpm && Math.abs(bpm - 15) < 2, `RSA 15/min: got ${bpm}`);
   }
-  console.log('rppg-math: all tests pass (7 cases)');
+  // Harmonic-sum: respiration harmonic (0.8Hz, stronger) must NOT beat pulse
+  // fundamental (1.2Hz with real 2nd harmonic) — expect ~72 BPM not ~48.
+  {
+    const fs = 30, N = 600;
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      sig[i] = 0.95 * Math.sin(2 * Math.PI * 0.8 * i / fs)  // resp. harmonic decoy (slightly stronger)
+             + 0.90 * Math.sin(2 * Math.PI * 1.2 * i / fs)  // true pulse
+             + 0.50 * Math.sin(2 * Math.PI * 2.4 * i / fs); // pulse 2nd harmonic
+    }
+    const f = m.bandpass(m.detrendSig(sig), fs, 0.7, 3.0);
+    const { bpm } = m.fftPeak(f, fs, 0.7, 3.0);
+    assert(Math.abs(bpm - 72) < 3, `harmonic-sum 72bpm: got ${bpm}`);
+  }
+  console.log('rppg-math: all tests pass (8 cases)');
 }
 run();

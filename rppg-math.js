@@ -78,17 +78,29 @@
     const hw = hanning(sig.length);
     for (let i = 0; i < sig.length; i++) seg[i] *= hw[i];
     const binHz = fs / N;
-    const loBin = Math.max(1, Math.floor(loHz / binHz));
+    const loBin = Math.max(1, Math.ceil(loHz / binHz));
     const hiBin = Math.min(Math.floor(hiHz / binHz), N >> 1);
-    let bestK = -1, bestMag = -1;
+    let bestK = -1, bestScore = -1, maxMag = 0;
     const mags = [];
     for (let k = loBin; k <= hiBin; k++) {
       let re = 0, im = 0;
       for (let n = 0; n < N; n++) { const a = -2 * Math.PI * k * n / N; re += seg[n] * Math.cos(a); im += seg[n] * Math.sin(a); }
       const m = re * re + im * im; mags.push(m);
-      if (m > bestMag) { bestMag = m; bestK = k; }
+      if (m > maxMag) maxMag = m;
     }
-    if (bestK < 0 || !mags.length) return { bpm: null, snr: 0 };
+    // Harmonic-sum scoring: a true pulse has energy at its 2nd harmonic;
+    // respiration/motion artifacts in-band don't. Prevents locking onto
+    // breathing harmonics (~0.8Hz ≈ "50 BPM") when the pulse is weak.
+    // Candidates need own energy (≥10% of max) to earn the harmonic boost —
+    // otherwise band-edge leakage bins win via their "harmonic" (sub-harmonic lock).
+    for (let i = 0; i < mags.length; i++) {
+      if (mags[i] < 0.1 * maxMag) continue;
+      const harmIdx = loBin + 2 * i;           // bin 2k → index 2k-loBin
+      const harm = harmIdx < mags.length ? mags[harmIdx] : 0;
+      const score = mags[i] + harm;
+      if (score > bestScore) { bestScore = score; bestK = i + loBin; }
+    }
+    if (bestK < 0 || !mags.length){ bestK = mags.indexOf(maxMag); }
     const idx = bestK - loBin;
     let delta = 0;
     if (idx > 0 && idx < mags.length - 1) {
