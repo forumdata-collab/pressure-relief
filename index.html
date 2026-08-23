@@ -829,7 +829,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v7 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v8 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -988,17 +988,20 @@ function stopCamera(){
     video.style.display = 'none';
 }
 
+let fmInitBusy = false;
 async function initFaceMesh(){
-    if(faceMeshReady) return;
+    if(faceMeshReady || fmInitBusy) return;
     if(typeof FaceMesh === 'undefined'){ console.warn('FaceMesh not loaded'); return; }
+    fmInitBusy = true;
     try{
         faceMeshInstance = new FaceMesh({locateFile: f => `wasm/${f}`});
         faceMeshInstance.setOptions({maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
         faceMeshInstance.onResults(r => { if(r.multiFaceLandmarks && r.multiFaceLandmarks.length) latestLandmarks = r.multiFaceLandmarks[0]; });
         await faceMeshInstance.initialize();
         faceMeshReady = true;
+        console.log('rPPG: FaceMesh ready');
     }catch(e){ console.warn('FaceMesh init failed:', e); }
-    if(!faceMeshReady) console.warn('rPPG: FaceMesh unavailable — using fallback ellipse ROI');
+    fmInitBusy = false;
 }
 
 // ==================== rPPG v2: GRGB method + Welch PSD + SNR gating ====================
@@ -1049,13 +1052,21 @@ function _roiMean(data, w, h, ids){
     return c ? {r:r/c, g:g/c, b:b/c} : null;
 }
 
-function processFrame(){
+let fmBusy = false;
+async function processFrame(){
     if(!camRunning) return;
     coverT = coverRect();
     camCtx.drawImage(video, coverT.sx, coverT.sy, coverT.sw, coverT.sh, 0, 0, camCanvas.width, camCanvas.height);
 
-    if(faceMeshReady && faceMeshInstance){
-        try{ faceMeshInstance.send({image: video}); }catch(e){}
+    // MediaPipe send() must be serialized + awaited (official pattern) —
+    // fire-and-forget sends while busy throw and we silently lose every frame.
+    if(faceMeshReady && faceMeshInstance && !fmBusy && video.readyState >= 2){
+        fmBusy = true;
+        try{ await faceMeshInstance.send({image: video}); }
+        catch(e){ console.warn('FaceMesh send failed:', e); }
+        fmBusy = false;
+    } else if(!faceMeshReady){
+        initFaceMesh();  // async, retries until ready
     }
 
     const frame = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
