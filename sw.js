@@ -1,5 +1,5 @@
 // Pressure Relief Service Worker
-const CACHE = 'pr-v25';
+const CACHE = 'pr-v26';
 // Bump CACHE together with the footer version string in index.html on every HTML change.
 const ASSETS = [
     './',
@@ -11,14 +11,14 @@ const ASSETS = [
 // wasm/ is runtime-cached (10MB, only fetch when camera used)
 
 self.addEventListener('install', e => {
-    e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+    e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
     e.waitUntil(
         caches.keys().then(keys =>
             Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-        )
+        ).then(() => self.clients.claim())
     );
 });
 
