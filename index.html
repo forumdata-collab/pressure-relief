@@ -829,7 +829,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v11 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v12 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -1115,7 +1115,10 @@ async function processFrame(){
         while(b.length > 2 && (b[b.length-1].t - b[0].t) / 1000 > need) b.shift();
     }
     // Draw cartoon overlay: blur face + cat ears following landmarks
-    if(latestLandmarks){
+    // Blur is O(face-box) JS pixel work — every frame it drags fps below the
+    // 12fps calcBPM floor on phones (lag + no data). Do it every 3rd frame;
+    // ears are cheap vector draws so they stay per-frame.
+    if(latestLandmarks && frameCnt % 3 === 0){
      try{
         const w = camCanvas.width, h = camCanvas.height;
         // Blur face region (ellipse around landmarks)
