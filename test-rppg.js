@@ -44,6 +44,16 @@ function run() {
     const { bpm } = m.fftPeak(new Float32Array(0), 30, 0.7, 3.0);
     assert(bpm === null, 'empty fftPeak');
   }
-  console.log('rppg-math: all tests pass (6 cases)');
+  // RSA breathing rate: IBI tachogram modulated at 0.25Hz (15 breaths/min)
+  {
+    const fsIbi = 1000 / 1000; // base HR 60bpm → 1 sample/s
+    const ibi = [];
+    for (let i = 0; i < 40; i++)
+      ibi.push(1000 + 25 * Math.sin(2 * Math.PI * 0.25 * i)); // ±25ms RSA
+    const f = m.bandpass(m.detrendSig(Float32Array.from(ibi)), fsIbi, 0.13, 0.5);
+    const { bpm } = m.fftPeak(f, fsIbi, 0.13, 0.5);
+    assert(bpm && Math.abs(bpm - 15) < 2, `RSA 15/min: got ${bpm}`);
+  }
+  console.log('rppg-math: all tests pass (7 cases)');
 }
 run();
