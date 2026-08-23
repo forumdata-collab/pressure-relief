@@ -829,7 +829,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v12 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v13 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -838,7 +838,6 @@
         </footer>
     </div>
 
-<script src="wasm/face_mesh.js" defer></script>
 <script>
 // ==================== 粒子背景 ====================
 (function(){
@@ -938,21 +937,20 @@ const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
 const sigCanvas = document.getElementById('signalGraph');
 const sigCtx = sigCanvas.getContext('2d');
 let camRunning = false, camStream = null, frameCnt = 0;
-// object-fit:cover transform: video frame → canvas crop params (set every processFrame)
-let coverT = null;
-function coverRect(){
-    const vw = video.videoWidth || camCanvas.width, vh = video.videoHeight || camCanvas.height;
-    const cw = camCanvas.width, ch = camCanvas.height;
-    const scale = Math.max(cw/vw, ch/vh);
-    const sw = cw/scale, sh = ch/scale;
-    return {sx:(vw-sw)/2, sy:(vh-sh)/2, sw, sh, scale, vw, vh};
-}
-// Map a normalized landmark (relative to raw video frame) to canvas px
-function lmXY(lm){
-    const t = coverT;
-    return {x:(lm.x*t.vw - t.sx)*t.scale, y:(lm.y*t.vh - t.sy)*t.scale};
-}
-let faceMeshInstance = null, faceMeshReady = false, latestLandmarks = null;
+
+// Downscaled processing canvas — sample at 160×120 instead of full frame.
+// 1/4 the pixels of 240×320 → far cheaper getImageData + ROI loops on mobile.
+const procCanvas = document.createElement('canvas');
+procCanvas.width = 160; procCanvas.height = 120;
+const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
+
+// Fixed-ratio 3-ROI (centered front face): forehead + both cheeks.
+// No FaceMesh → stable positions, never lag. [cx, cy, rx, ry] as fractions.
+const ROI = {
+    f: [0.50, 0.32, 0.08, 0.10],
+    l: [0.38, 0.50, 0.07, 0.09],
+    r: [0.62, 0.50, 0.07, 0.09]
+};
 
 async function toggleCamera(){ camRunning ? stopCamera() : await startCamera(); }
 
@@ -966,14 +964,13 @@ async function startCamera(){
         document.getElementById('camPlaceholder').style.display = 'none';
         document.getElementById('bpmDisplay').style.display = 'block';
         sigCanvas.style.display = 'block';
-        camCanvas.style.display = 'block';
+        camCanvas.style.display = 'none';   // no overlay now; video shows directly
         video.style.display = 'block';
-        camCanvas.width = 240; camCanvas.height = 320;
         sigCanvas.width = 200; sigCanvas.height = 60;
         RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.lastCalc = 0;
         frameCnt = 0;
-        initFaceMesh();
-        processFrame();
+        if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
+        else requestAnimationFrame(loop);
     }catch(e){ alert('無法存取攝像頭：'+e.message); }
 }
 
@@ -983,203 +980,57 @@ function stopCamera(){
     document.getElementById('camToggle').textContent = '啟動攝像頭';
     document.getElementById('camPlaceholder').style.display = 'flex';
     document.getElementById('bpmDisplay').style.display = 'none';
-    camCanvas.style.display = 'none';
     sigCanvas.style.display = 'none';
     video.style.display = 'none';
 }
 
-let fmInitBusy = false, fmError = '';
-function fmStatus(msg){
-    fmError = msg;
-    const el = document.getElementById('bpmHint');
-    if(el && !RPPG.displayBpm) el.textContent = 'FaceMesh: ' + msg;
-    console.warn('rPPG FaceMesh:', msg);
-}
-async function initFaceMesh(){
-    if(faceMeshReady || fmInitBusy) return;
-    if(typeof FaceMesh === 'undefined'){ fmStatus('script not loaded'); return; }
-    fmInitBusy = true;
-    try{
-        faceMeshInstance = new FaceMesh({locateFile: f => `wasm/${f}`});
-        faceMeshInstance.setOptions({maxNumFaces:1, refineLandmarks:false, minDetectionConfidence:0.5, minTrackingConfidence:0.5});
-        faceMeshInstance.onResults(r => {
-            if(r.multiFaceLandmarks && r.multiFaceLandmarks.length){
-                latestLandmarks = r.multiFaceLandmarks[0];
-                fmStatus('ok (' + latestLandmarks.length + ' pts)');
-            } else {
-                // initialized but no face found this frame — keep old landmarks briefly
-                fmStatus('no face in frame');
-            }
-        });
-        await faceMeshInstance.initialize();
-        faceMeshReady = true;
-        fmStatus('initialized');
-    }catch(e){ fmStatus('init failed: ' + (e && e.message || e)); }
-    fmInitBusy = false;
-}
-
-// ==================== rPPG v2: GRGB method + Welch PSD + SNR gating ====================
-// Research basis:
-// - GRGB (Casal et al., Bioengineering 2023): rPPG(t) = G/R + G/B — beat POS/CHROM
-//   in Gym/Talk/Rotation settings, |ΔBPM| as low as 0.73. Motion+light robust.
-// - rPPG-Toolbox (NeurIPS 2023): 10s windows, Butterworth bandpass, FFT peak,
-//   SNR quality gate. Multi-ROI averaging (forehead + both cheeks).
-// - FaceMesh landmark sets from GRGB paper for 3 ROI groups.
-
-// ---- FaceMesh skin landmark groups (GRGB paper §2.3) ----
-const ROI_FOREHEAD = [107, 66, 69, 109, 10, 338, 299, 296, 336, 9];
-const ROI_LCHEEK   = [118, 119, 100, 126, 209, 49, 129, 203, 205, 50];
-const ROI_RCHEEK   = [347, 348, 329, 355, 429, 279, 358, 423, 425, 280];
-
+// ==================== rPPG: GRGB, fixed 3-ROI, downscaled ====================
+// GRGB (Casal et al. 2023): rPPG(t)=G/R+G/B — light-invariant, motion-robust.
 const RPPG = {
-    FS: 30,              // assumed fps
-    WIN_SEC: 10,         // rPPG-Toolbox standard window
-    BAND_LOW: 0.7,       // Hz (~42 BPM)
-    BAND_HIGH: 3.0,      // Hz (~180 BPM) — narrower than before per toolbox rec
-    OVERLAP: 0.5,
-    // buffers: per-frame mean RGB of each ROI
-    roiBuf: [],          // [{f:{r,g,b}, l:{...}, r:{...}}]
-    maxLen: 600,         // hard sample cap (real cap is time-based trimBuf)
-    // output state
-    bpmWindow: [],
-    displayBpm: null,
-    snrHistory: []
+    WIN_SEC: 10, BAND_LOW: 0.7, BAND_HIGH: 3.0,
+    roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: []
 };
-// Undeclared vars here threw ReferenceError inside calcBPM on first analysis pass,
-// killing the requestAnimationFrame loop → BPM never displayed.
 let displayBpm = null;
 const bpmWindow = RPPG.bpmWindow;
 
-function _roiMean(data, w, h, ids){
+// Mean RGB of an elliptical region (fractions of procCanvas). Stride 2 px.
+function _roiMean(d, w, h, [cx, cy, rx, ry]){
+    const x0=Math.max(1,((cx-rx)*w)|0), x1=Math.min(w-2,((cx+rx)*w)|0);
+    const y0=Math.max(1,((cy-ry)*h)|0), y1=Math.min(h-2,((cy+ry)*h)|0);
     let r=0,g=0,b=0,c=0;
-    if(!latestLandmarks) return null;
-    for(const idx of ids){
-        if(idx >= latestLandmarks.length) continue;
-        const {x:px, y:py} = lmXY(latestLandmarks[idx]);
-        for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
-            const sx=px+dx, sy=py+dy;
-            if(sx<0||sx>=w||sy<0||sy>=h) continue;
-            const i=(sy*w+sx)*4;
-            r+=data[i]; g+=data[i+1]; b+=data[i+2]; c++;
-        }
+    for(let y=y0;y<=y1;y+=2) for(let x=x0;x<=x1;x+=2){
+        const i=(y*w+x)*4; r+=d[i]; g+=d[i+1]; b+=d[i+2]; c++;
     }
     return c ? {r:r/c, g:g/c, b:b/c} : null;
 }
 
-let fmBusy = false;
-async function processFrame(){
+function loop(){
     if(!camRunning) return;
-    coverT = coverRect();
-    camCtx.drawImage(video, coverT.sx, coverT.sy, coverT.sw, coverT.sh, 0, 0, camCanvas.width, camCanvas.height);
+    processFrame();
+    if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
+    else requestAnimationFrame(loop);
+}
 
-    // MediaPipe send() must be serialized + awaited (official pattern) —
-    // fire-and-forget sends while busy throw and we silently lose every frame.
-    if(faceMeshReady && faceMeshInstance && !fmBusy && video.readyState >= 2){
-        fmBusy = true;
-        try{ await faceMeshInstance.send({image: video}); }
-        catch(e){ console.warn('FaceMesh send failed:', e); }
-        fmBusy = false;
-    } else if(!faceMeshReady){
-        initFaceMesh();  // async, retries until ready
+function processFrame(){
+    if(!camRunning || video.readyState < 2) return;
+    // cover-crop video → downscaled procCanvas
+    const vw = video.videoWidth, vh = video.videoHeight, cw = procCanvas.width, ch = procCanvas.height;
+    const scale = Math.max(cw/vw, ch/vh), sw = cw/scale, sh = ch/scale;
+    procCtx.drawImage(video, (vw-sw)/2, (vh-sh)/2, sw, sh, 0, 0, cw, ch);
+    const d = procCtx.getImageData(0, 0, cw, ch).data, w = cw, h = ch;
+
+    const f = _roiMean(d,w,h,ROI.f), l = _roiMean(d,w,h,ROI.l), rr = _roiMean(d,w,h,ROI.r);
+    if(f && l && rr){
+        RPPG.roiBuf.push({f, l, r:rr, t: performance.now()});
+        const b = RPPG.roiBuf, need = RPPG.WIN_SEC*0.8 + 2;
+        while(b.length > 2 && (b[b.length-1].t - b[0].t)/1000 > need) b.shift();
     }
 
-    const frame = camCtx.getImageData(0, 0, camCanvas.width, camCanvas.height);
-    const d = frame.data, w = camCanvas.width, h = camCanvas.height;
-
-    if(latestLandmarks){
-        const f = _roiMean(d,w,h,ROI_FOREHEAD);
-        const l = _roiMean(d,w,h,ROI_LCHEEK);
-        const rr = _roiMean(d,w,h,ROI_RCHEEK);
-        if(f&&l&&rr){
-            RPPG.roiBuf.push({f,l,r:rr, t:performance.now()});   // real timestamp per sample
-            trimBuf();
-        }
-    } else {
-        // fallback ellipse → single ROI treated as all three
-        const cx = w/2, cy = h*0.45, rx = w*0.25, ry = h*0.3;
-        let r=0,g=0,b=0,c=0;
-        for(let y=Math.floor(cy-ry); y<Math.floor(cy+ry); y+=2)
-            for(let x=Math.floor(cx-rx); x<Math.floor(cx+rx); x+=2)
-                if(((x-cx)/rx)**2+((y-cy)/ry)**2<=1){
-                    const i=(y*w+x)*4; r+=d[i]; g+=d[i+1]; b+=d[i+2]; c++;
-                }
-        if(c){
-            const roi = {r:r/c, g:g/c, b:b/c};
-            RPPG.roiBuf.push({f:roi,l:roi,r:roi, t:performance.now()}); trimBuf();
-        }
-    }
     // Cap buffer by TIME span, not sample count — at 60fps a 300-sample cap
     // is only 5s and the 8s display gate can NEVER pass ("stuck at 3s" bug).
     function trimBuf(){
         const b = RPPG.roiBuf, need = RPPG.WIN_SEC * 0.8 + 2;  // gate span + headroom
         while(b.length > 2 && (b[b.length-1].t - b[0].t) / 1000 > need) b.shift();
-    }
-    // Draw cartoon overlay: blur face + cat ears following landmarks
-    // Blur is O(face-box) JS pixel work — every frame it drags fps below the
-    // 12fps calcBPM floor on phones (lag + no data). Do it every 3rd frame;
-    // ears are cheap vector draws so they stay per-frame.
-    if(latestLandmarks && frameCnt % 3 === 0){
-     try{
-        const w = camCanvas.width, h = camCanvas.height;
-        // Blur face region (ellipse around landmarks)
-        let minX=w, minY=h, maxX=0, maxY=0;
-        for(const lm of latestLandmarks){
-            const p = lmXY(lm);
-            const px=p.x, py=p.y;
-            if(px<minX) minX=px; if(py<minY) minY=py;
-            if(px>maxX) maxX=px; if(py>maxY) maxY=py;
-        }
-        const pad=20;
-        minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad);
-        maxX=Math.min(w,maxX+pad); maxY=Math.min(h,maxY+pad);
-        const fw=maxX-minX, fh=maxY-minY;
-        if(fw>10 && fh>10){
-            try{
-                const faceData = camCtx.getImageData(minX,minY,fw,fh);
-                // Simple box blur (3x3 avg) — ponytail: fast enough for 240x320
-                const bd = faceData.data;
-                const tmp = new Uint8ClampedArray(bd);
-                for(let y=1;y<fh-1;y++) for(let x=1;x<fw-1;x++){
-                    const i=(y*fw+x)*4;
-                    for(let c=0;c<3;c++){
-                        tmp[i+c] = (bd[i+c]+bd[i+c-4]+bd[i+c+4]+bd[i+c-fw*4]+bd[i+c+fw*4])/5|0;
-                    }
-                }
-                faceData.data.set(tmp);
-                camCtx.putImageData(faceData, minX, minY);
-            }catch(e){}
-        }
-        // Cat ears at top-left and top-right of head (landmarks 234, 454 ≈ ear tops)
-        const earSize = Math.min(w,h)*0.18;
-        const drawEar = (lm, flip) => {
-            const p = lmXY(lm);
-            const ex = p.x, ey = p.y - earSize*0.6;
-            camCtx.save();
-            camCtx.translate(ex, ey);
-            if(flip) camCtx.scale(-1,1);
-            camCtx.fillStyle = '#ffb6c1';
-            camCtx.beginPath();
-            camCtx.moveTo(0, 0);
-            camCtx.lineTo(-earSize*0.5, -earSize);
-            camCtx.lineTo(earSize*0.5, -earSize);
-            camCtx.closePath();
-            camCtx.fill();
-            camCtx.strokeStyle = '#ff69b4';
-            camCtx.lineWidth = 2;
-            camCtx.stroke();
-            // Inner ear
-            camCtx.fillStyle = '#ff91a4';
-            camCtx.beginPath();
-            camCtx.moveTo(0, -earSize*0.15);
-            camCtx.lineTo(-earSize*0.25, -earSize*0.7);
-            camCtx.lineTo(earSize*0.25, -earSize*0.7);
-            camCtx.closePath();
-            camCtx.fill();
-            camCtx.restore();
-        };
-        if(latestLandmarks[234]) drawEar(latestLandmarks[234], false);
-        if(latestLandmarks[454]) drawEar(latestLandmarks[454], true);
-     }catch(e){ /* cartoon overlay must never kill the rAF loop */ }
     }
 
     frameCnt++;
@@ -1192,12 +1043,12 @@ async function processFrame(){
     const hint = document.getElementById('bpmHint');
     if(hint){
         if(RPPG.displayBpm !== null){
-            hint.textContent = fmError && !fmError.startsWith('ok') ? 'FaceMesh: ' + fmError : '';
+            hint.textContent = '';
         } else {
             const remaining = Math.max(0, needSec - bufSpan);
-            hint.textContent = (remaining > 0
+            hint.textContent = remaining > 0
                 ? `採樣中… 約 ${remaining.toFixed(0)} 秒後顯示心率（請保持不動）`
-                : '分析中…') + (fmError ? ` | FaceMesh: ${fmError}` : '');
+                : '分析中…';
         }
     }
     // Recalc at most every 0.5s once we have enough coverage (frameCnt%60 stalls at low fps)
@@ -1333,6 +1184,7 @@ function calcBPM(){
     if(displayBpm !== null && Math.abs(median-displayBpm) > 12 && bpmWindow.length < 5) return;
 
     displayBpm = median;
+    RPPG.displayBpm = median;  // keep in sync: hint reads RPPG.displayBpm
     document.getElementById('bpmValue').textContent = displayBpm;
     updateGauge(displayBpm);
     recordBPM(displayBpm);
