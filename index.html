@@ -830,7 +830,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v18 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v19 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -966,7 +966,7 @@ async function startCamera(){
         sigCanvas.style.display = 'block';
         video.style.display = 'block';
         sigCanvas.width = 200; sigCanvas.height = 60;
-        RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.lastCalc = 0;
+        RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.ibiBuf = []; RPPG.lastCalc = 0;
         if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
         else requestAnimationFrame(loop);
     }catch(e){ alert('無法存取攝像頭：'+e.message); }
@@ -986,7 +986,7 @@ function stopCamera(){
 // GRGB (Casal et al. 2023): rPPG(t)=G/R+G/B — light-invariant, motion-robust.
 const RPPG = {
     WIN_SEC: 10, BAND_LOW: 0.7, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s
-    roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: []
+    roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: [], ibiBuf: []
 };
 let displayBpm = null;
 const bpmWindow = RPPG.bpmWindow;
@@ -1105,17 +1105,24 @@ function computeExtendedVitals(sig, fs){
     const ibi = [];
     for(let i=1;i<peaks.length;i++) ibi.push((peaks[i]-peaks[i-1])/fs*1000);
 
+    // Accumulate tachogram across windows (~last 64 beats ≈ 60s) — breathing rate
+    // needs a long series; HRV stays on the short window below.
+    RPPG.ibiBuf.push(...ibi);
+    if(RPPG.ibiBuf.length > 64) RPPG.ibiBuf.splice(0, RPPG.ibiBuf.length - 64);
+
     // --- HRV (RMSSD): root-mean-square of successive IBI differences ---
     let sqSum=0;
     for(let i=1;i<ibi.length;i++) sqSum += (ibi[i]-ibi[i-1])**2;
     const rmssd = Math.sqrt(sqSum/(ibi.length-1));
 
     // --- Breathing rate: RSA — low-freq modulation of IBI series (0.13–0.5 Hz) ---
+    // Uses accumulated ~60s tachogram when available (better freq resolution).
     let br = null;
-    if(ibi.length >= 8){
-        const meanIbiMs = ibi.reduce((a,b)=>a+b,0)/ibi.length;
+    const tacho = RPPG.ibiBuf.length >= 24 ? RPPG.ibiBuf : ibi;  // ≥~25s of beats
+    if(tacho.length >= 8){
+        const meanIbiMs = tacho.reduce((a,b)=>a+b,0)/tacho.length;
         const fsIbi = 1000 / meanIbiMs;  // tachogram: one sample per beat → ~1.2Hz
-        const {bpm: brBpm} = fftPeak(detrendSig(Float32Array.from(ibi)), fsIbi, 0.13, 0.5);
+        const {bpm: brBpm} = fftPeak(detrendSig(Float32Array.from(tacho)), fsIbi, 0.13, 0.5);
         if(brBpm && brBpm >= 8 && brBpm <= 30) br = Math.round(brBpm);
     }
 
