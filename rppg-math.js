@@ -22,6 +22,7 @@
 
   // GRGB signal: per-frame G/R + G/B averaged across ROIs (light-invariant).
   function buildSignal(buf) {
+    if (!buf || !buf.length) return new Float32Array(0);
     const N = buf.length;
     const sig = new Float32Array(N);
     for (let i = 0; i < N; i++) {
