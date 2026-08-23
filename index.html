@@ -1014,7 +1014,7 @@ function stopCamera(){
 // ==================== rPPG: GRGB, fixed 3-ROI, downscaled ====================
 // GRGB (Casal et al. 2023): rPPG(t)=G/R+G/B — light-invariant, motion-robust.
 const RPPG = {
-    WIN_SEC: 10, BAND_LOW: 0.9, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s; LOW=0.9Hz(54bpm) floors out resp-harmonic/AE artifact locks (~50bpm)
+    WIN_SEC: 12, BAND_LOW: 0.9, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s; LOW=0.9Hz(54bpm) floors out resp-harmonic/AE artifact locks (~50bpm)
     roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: [], ibiBuf: []
 };
 let displayBpm = null;

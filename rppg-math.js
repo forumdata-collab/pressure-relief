@@ -8,7 +8,7 @@
 
   // ---- GRGB constants (rPPG band of interest) ----
   // LOW=0.9Hz floors out sub-54bpm artifact zone (resp harmonics / camera AE wobble).
-  const BAND_LOW = 0.9, BAND_HIGH = 3.0, WIN_SEC = 10;
+  const BAND_LOW = 0.9, BAND_HIGH = 3.0, WIN_SEC = 12;
 
   // Mean RGB of an elliptical region (fractions of canvas). Stride 2 px.
   function _roiMean(d, w, h, [cx, cy, rx, ry]) {
@@ -105,7 +105,9 @@
     const idx = bestK - loBin;
     let delta = 0;
     if (idx > 0 && idx < mags.length - 1) {
-      const a = Math.log(mags[idx - 1] + 1e-12), b = Math.log(mags[idx] + 1e-12), c = Math.log(mags[idx + 1] + 1e-12);
+      // Magnitude-domain parabola (sqrt of power): less noise-biased than
+      // log-domain for weak face-mode signals (systematic low-BPM bias).
+      const a = Math.sqrt(mags[idx - 1] + 1e-12), b = Math.sqrt(mags[idx] + 1e-12), c = Math.sqrt(mags[idx + 1] + 1e-12);
       delta = 0.5 * (a - c) / (a - 2 * b + c || 1e-12);
     }
     const devBins = Math.round(0.2 / binHz);
