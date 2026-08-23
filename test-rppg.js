@@ -82,4 +82,18 @@ function run() {
   }
   console.log('rppg-math: all tests pass (9 cases)');
 }
+// acfBpm: 60bpm pulse in noise → ~60
+{
+  const m = require('./rppg-math.js');
+  const fs = 30, N = 600, sig = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    sig[i] = Math.sin(2 * Math.PI * 1.0 * i / fs) + (Math.random() - 0.5) * 0.8;
+  }
+  const f = m.bandpass(m.detrendSig(sig), fs, 0.7, 3.0);
+  const r = m.acfBpm(f, fs, 50, 150);
+  assert(r && Math.abs(r.bpm - 60) < 4, `acfBpm 60: got ${r && r.bpm}`);
+  // short-signal guard
+  assert(m.acfBpm(new Float32Array(10), 30, 50, 150) === null, 'acfBpm short guard');
+  console.log('acfBpm: 2 cases pass');
+}
 run();

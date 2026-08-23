@@ -121,5 +121,26 @@
     return { bpm: (bestK + delta) * binHz * 60, snr };
   }
 
-  return { BAND_LOW, BAND_HIGH, WIN_SEC, _roiMean, buildSignal, detrendSig, bandpass, hanning, fftPeak };
+  // Autocorrelation BPM: dominant periodicity over lag range [loBpm..hiBpm].
+  // Robust to harmonic/sub-harmonic confusion and noise-hump drift that
+  // bias raw spectral peaks on weak (face-mode) signals.
+  function acfBpm(sig, fs, loBpm, hiBpm) {
+    if (!sig || sig.length < fs * 2 || !fs) return null;
+    const mean = sig.reduce((a, v) => a + v, 0) / sig.length;
+    const minLag = Math.max(1, Math.floor(fs * 60 / hiBpm));
+    const maxLag = Math.min(sig.length - 2, Math.ceil(fs * 60 / loBpm));
+    if (maxLag <= minLag) return null;
+    const e0 = sig.reduce((a, v) => a + (v - mean) * (v - mean), 0);
+    if (!e0) return null;
+    let bestLag = 0, bestV = -Infinity;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let s = 0;
+      for (let i = lag; i < sig.length; i++) s += (sig[i] - mean) * (sig[i - lag] - mean);
+      const r = s / e0;
+      if (r > bestV) { bestV = r; bestLag = lag; }
+    }
+    return bestLag ? { bpm: 60 / (bestLag / fs), r: bestV } : null;
+  }
+
+  return { BAND_LOW, BAND_HIGH, WIN_SEC, _roiMean, buildSignal, detrendSig, bandpass, hanning, fftPeak, acfBpm };
 });
