@@ -834,7 +834,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v4 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v5 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -957,6 +957,7 @@ async function startCamera(){
         document.getElementById('camPlaceholder').style.display = 'none';
         document.getElementById('bpmDisplay').style.display = 'block';
         sigCanvas.style.display = 'block';
+        camCanvas.style.display = 'block';
         video.style.display = 'block';
         camCanvas.width = 240; camCanvas.height = 320;
         sigCanvas.width = 200; sigCanvas.height = 60;
@@ -973,6 +974,7 @@ function stopCamera(){
     document.getElementById('camToggle').textContent = '啟動攝像頭';
     document.getElementById('camPlaceholder').style.display = 'flex';
     document.getElementById('bpmDisplay').style.display = 'none';
+    camCanvas.style.display = 'none';
     sigCanvas.style.display = 'none';
     video.style.display = 'none';
 }
@@ -987,6 +989,7 @@ async function initFaceMesh(){
         await faceMeshInstance.initialize();
         faceMeshReady = true;
     }catch(e){ console.warn('FaceMesh init failed:', e); }
+    if(!faceMeshReady) console.warn('rPPG: FaceMesh unavailable — using fallback ellipse ROI');
 }
 
 // ==================== rPPG v2: GRGB method + Welch PSD + SNR gating ====================
@@ -1073,6 +1076,7 @@ function processFrame(){
     }
     // Draw cartoon overlay: blur face + cat ears following landmarks
     if(latestLandmarks){
+     try{
         const w = camCanvas.width, h = camCanvas.height;
         // Blur face region (ellipse around landmarks)
         let minX=w, minY=h, maxX=0, maxY=0;
@@ -1130,6 +1134,7 @@ function processFrame(){
         };
         if(latestLandmarks[234]) drawEar(latestLandmarks[234], false);
         if(latestLandmarks[454]) drawEar(latestLandmarks[454], true);
+     }catch(e){ /* cartoon overlay must never kill the rAF loop */ }
     }
 
     frameCnt++;
