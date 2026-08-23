@@ -830,7 +830,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v16 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v17 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -932,12 +932,11 @@ function stopBreathing(){
     document.getElementById('breathStatus').textContent = '已停止';
 }
 
-// ==================== 鏡頭心跳 rPPG + FaceMesh ====================
+// ==================== 鏡頭心跳 rPPG ====================
 const video = document.getElementById('videoElement');
-const camCanvas = document.getElementById('cameraCanvas');
 const sigCanvas = document.getElementById('signalGraph');
 const sigCtx = sigCanvas.getContext('2d');
-let camRunning = false, camStream = null, frameCnt = 0;
+let camRunning = false, camStream = null;
 
 // Downscaled processing canvas — sample at 160×120 instead of full frame.
 // 1/4 the pixels of 240×320 → far cheaper getImageData + ROI loops on mobile.
@@ -965,11 +964,9 @@ async function startCamera(){
         document.getElementById('camPlaceholder').style.display = 'none';
         document.getElementById('bpmDisplay').style.display = 'block';
         sigCanvas.style.display = 'block';
-        camCanvas.style.display = 'none';   // no overlay now; video shows directly
         video.style.display = 'block';
         sigCanvas.width = 200; sigCanvas.height = 60;
         RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.lastCalc = 0;
-        frameCnt = 0;
         if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
         else requestAnimationFrame(loop);
     }catch(e){ alert('無法存取攝像頭：'+e.message); }
@@ -1017,18 +1014,12 @@ function processFrame(){
     const f = _roiMean(d,w,h,ROI.f), l = _roiMean(d,w,h,ROI.l), rr = _roiMean(d,w,h,ROI.r);
     if(f && l && rr){
         RPPG.roiBuf.push({f, l, r:rr, t: performance.now()});
-        const b = RPPG.roiBuf, need = RPPG.WIN_SEC*0.8 + 2;
+        // Cap buffer by TIME span, not sample count — at 60fps a 300-sample cap
+        // is only 5s and the 8s display gate can NEVER pass ("stuck at 3s" bug).
+        const b = RPPG.roiBuf, need = RPPG.WIN_SEC*0.8 + 2;  // gate span + headroom
         while(b.length > 2 && (b[b.length-1].t - b[0].t)/1000 > need) b.shift();
     }
 
-    // Cap buffer by TIME span, not sample count — at 60fps a 300-sample cap
-    // is only 5s and the 8s display gate can NEVER pass ("stuck at 3s" bug).
-    function trimBuf(){
-        const b = RPPG.roiBuf, need = RPPG.WIN_SEC * 0.8 + 2;  // gate span + headroom
-        while(b.length > 2 && (b[b.length-1].t - b[0].t) / 1000 > need) b.shift();
-    }
-
-    frameCnt++;
     // Time-based gate: sample counts vary with real fps (FaceMesh can drop rAF to ~15fps),
     // so require 8s of wall-clock coverage in the buffer instead of a fixed sample count.
     const needSec = RPPG.WIN_SEC * 0.8;
@@ -1046,7 +1037,7 @@ function processFrame(){
                 : '分析中…';
         }
     }
-    // Recalc at most every 0.5s once we have enough coverage (frameCnt%60 stalls at low fps)
+    // Recalc at most every 0.5s once we have enough coverage
     if(bufSpan >= needSec && performance.now() - (RPPG.lastCalc||0) > 500){
         RPPG.lastCalc = performance.now();
         calcBPM();
