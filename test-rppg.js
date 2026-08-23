@@ -68,6 +68,18 @@ function run() {
     const { bpm } = m.fftPeak(f, fs, 0.7, 3.0);
     assert(Math.abs(bpm - 72) < 3, `harmonic-sum 72bpm: got ${bpm}`);
   }
-  console.log('rppg-math: all tests pass (8 cases)');
+  // Band floor 0.9Hz: dominant 0.8Hz artifact is OUT of band entirely → true pulse wins
+  {
+    const fs = 30, N = 600;
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      sig[i] = 1.0 * Math.sin(2 * Math.PI * 0.8 * i / fs)   // out-of-band artifact
+             + 0.6 * Math.sin(2 * Math.PI * 1.2 * i / fs);  // true pulse @72bpm
+    }
+    const f = m.bandpass(m.detrendSig(sig), fs, 0.9, 3.0);
+    const { bpm } = m.fftPeak(f, fs, 0.9, 3.0);
+    assert(Math.abs(bpm - 72) < 3, `band-floor 72bpm: got ${bpm}`);
+  }
+  console.log('rppg-math: all tests pass (9 cases)');
 }
 run();

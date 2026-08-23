@@ -1,5 +1,5 @@
 // Pressure Relief Service Worker
-const CACHE = 'pr-v21';
+const CACHE = 'pr-v22';
 // Bump CACHE together with the footer version string in index.html on every HTML change.
 const ASSETS = [
     './',
