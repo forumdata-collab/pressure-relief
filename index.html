@@ -80,6 +80,17 @@
             animation: bgPulse 12s ease-in-out infinite;
         }
 
+        /* Toast notifications — non-blocking alert replacement */
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            max-width: 86vw; padding: 10px 20px; border-radius: 12px;
+            background: var(--bg-card, rgba(20,30,40,.95)); border: 1px solid var(--border, rgba(255,255,255,.15));
+            color: var(--text, #e6edf3); font-size: 0.85rem; z-index: 9999;
+            white-space: pre-line; box-shadow: 0 4px 16px rgba(0,0,0,.35);
+            animation: toastIn 0.25s ease; transition: opacity 0.3s ease;
+        }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+
         @keyframes bgPulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.85; }
@@ -835,7 +846,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v27 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v28 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -846,6 +857,14 @@
 
 <script src="rppg-math.js"></script>
 <script>
+// Non-blocking toast — replaces showToast() so the main thread never freezes.
+function showToast(msg, ms = 3200) {
+    const t = document.createElement('div');
+    t.className = 'toast'; t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 320); }, ms);
+}
+
 // ==================== 粒子背景 ====================
 (function(){
     const box = document.getElementById('particles');
@@ -975,11 +994,11 @@ async function startCamera(facing){
             const caps = track.getCapabilities ? track.getCapabilities() : {};
             if(!caps.torch){
                 stopCamera();
-                alert('此瀏覽器唔支援手電筒控制（iOS Safari 不支援）。請用 Android Chrome。');
+                showToast('此瀏覽器唔支援手電筒控制（iOS Safari 不支援）。請用 Android Chrome。');
                 return;
             }
             try{ await track.applyConstraints({ advanced: [{ torch: true }] }); }
-            catch(e){ stopCamera(); alert('無法開啟手電筒：'+e.message); return; }
+            catch(e){ stopCamera(); showToast('無法開啟手電筒：'+e.message); return; }
         }
         camRunning = true;
         document.getElementById('camToggle').textContent = fingerMode ? '👆 啟動電筒中' : '😊 啟動鏡頭中';
@@ -992,7 +1011,7 @@ async function startCamera(facing){
         RPPG.roiBuf = []; RPPG.bpmWindow = []; RPPG.displayBpm = null; RPPG.snrHistory = []; RPPG.ibiBuf = []; RPPG.lastCalc = 0;
         if('requestVideoFrameCallback' in HTMLVideoElement.prototype) video.requestVideoFrameCallback(loop);
         else requestAnimationFrame(loop);
-    }catch(e){ fingerMode = false; alert('無法存取攝像頭：'+e.message); }
+    }catch(e){ fingerMode = false; showToast('無法存取攝像頭：'+e.message); }
 }
 
 function stopCamera(){
@@ -1353,7 +1372,7 @@ function playBell(){
     o.frequency.value = 528; o.type = 'sine';
     g.gain.setValueAtTime(0.25, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 3);
-    o.connect(g); g.connect(audioCtx.destination);
+    o.connect(g); g.connect(gainNode || audioCtx.destination);
     o.start(); o.stop(audioCtx.currentTime + 3);
 }
 
@@ -1368,7 +1387,7 @@ function selectMood(mood, el){
 
 function saveJournal(){
     const note = document.getElementById('journalNote').value;
-    if(!selMood && !note){ alert('請選擇心情或寫下感受'); return; }
+    if(!selMood && !note){ showToast('請選擇心情或寫下感受'); return; }
     const entry = {
         time: new Date().toLocaleString('zh-TW',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),
         mood: selMood || '😐', note: note || '無文字',
@@ -1383,12 +1402,14 @@ function saveJournal(){
     selMood = null;
 }
 
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+
 function renderHistory(){
     const h = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
     document.getElementById('journalHistory').innerHTML = h.map(e=>`
         <div class="history-item">
-            <time>${e.time}</time> ${e.mood} · ${e.bpm}<br>
-            ${e.note !== '無文字' ? e.note : ''}
+            <time>${escapeHtml(e.time)}</time> ${escapeHtml(e.mood)} · ${escapeHtml(e.bpm)}<br>
+            ${e.note !== '無文字' ? escapeHtml(e.note) : ''}
         </div>
     `).join('');
 }
@@ -1397,17 +1418,19 @@ renderHistory();
 // ==================== Journal CSV Export ====================
 function exportJournal(){
     const h = JSON.parse(localStorage.getItem('pressureJournal') || '[]');
-    if(!h.length){ alert('日記係空的'); return; }
+    if(!h.length){ showToast('日記係空的'); return; }
     let csv = '\uFEFF時間,心情,BPM,備註\n'; // BOM for Excel
     h.forEach(e => {
         const note = (e.note||'').replace(/"/g,'""');
         csv += `"${e.time}","${e.mood}","${e.bpm}","${note}"\n`;
     });
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = 'pressure-journal-' + new Date().toISOString().slice(0,10) + '.csv';
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
 // ==================== BPM History Trend ====================
@@ -1509,9 +1532,9 @@ function showSessionSummary(){
     const s = getSessionSummary();
     if(s){
         const dir = s.delta <= -3 ? '下降' : s.delta >= 3 ? '上升' : '持平';
-        alert(`🧘 冥想完成！\n\n本次心率：平均 ${s.avg} BPM（${s.first} → ${s.last}，${dir}${Math.abs(s.delta)>0 ? ' '+Math.abs(s.delta) : ''} BPM）`);
+        showToast(`🧘 冥想完成！\n\n本次心率：平均 ${s.avg} BPM（${s.first} → ${s.last}，${dir}${Math.abs(s.delta)>0 ? ' '+Math.abs(s.delta) : ''} BPM）`);
     } else {
-        alert('🧘 冥想完成！願你內心平靜。');
+        showToast('🧘 冥想完成！願你內心平靜。');
     }
 }
 </script>
