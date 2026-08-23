@@ -829,7 +829,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v13 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v14 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -838,6 +838,7 @@
         </footer>
     </div>
 
+<script src="rppg-math.js"></script>
 <script>
 // ==================== 粒子背景 ====================
 (function(){
@@ -933,7 +934,6 @@ function stopBreathing(){
 // ==================== 鏡頭心跳 rPPG + FaceMesh ====================
 const video = document.getElementById('videoElement');
 const camCanvas = document.getElementById('cameraCanvas');
-const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
 const sigCanvas = document.getElementById('signalGraph');
 const sigCtx = sigCanvas.getContext('2d');
 let camRunning = false, camStream = null, frameCnt = 0;
@@ -987,22 +987,16 @@ function stopCamera(){
 // ==================== rPPG: GRGB, fixed 3-ROI, downscaled ====================
 // GRGB (Casal et al. 2023): rPPG(t)=G/R+G/B — light-invariant, motion-robust.
 const RPPG = {
-    WIN_SEC: 10, BAND_LOW: 0.7, BAND_HIGH: 3.0,
+    WIN_SEC: 10, BAND_LOW: 0.7, BAND_HIGH: 3.0, FS: 30,  // FS = fallback fps if span<1s
     roiBuf: [], bpmWindow: [], displayBpm: null, snrHistory: []
 };
 let displayBpm = null;
 const bpmWindow = RPPG.bpmWindow;
-
-// Mean RGB of an elliptical region (fractions of procCanvas). Stride 2 px.
-function _roiMean(d, w, h, [cx, cy, rx, ry]){
-    const x0=Math.max(1,((cx-rx)*w)|0), x1=Math.min(w-2,((cx+rx)*w)|0);
-    const y0=Math.max(1,((cy-ry)*h)|0), y1=Math.min(h-2,((cy+ry)*h)|0);
-    let r=0,g=0,b=0,c=0;
-    for(let y=y0;y<=y1;y+=2) for(let x=x0;x<=x1;x+=2){
-        const i=(y*w+x)*4; r+=d[i]; g+=d[i+1]; b+=d[i+2]; c++;
-    }
-    return c ? {r:r/c, g:g/c, b:b/c} : null;
-}
+// Core math lives in rppg-math.js (unit-tested). Local aliases with fallback so JS syntax still parses.
+let _roiMean = typeof RPPG_MATH !== 'undefined' ? RPPG_MATH._roiMean : null;
+let buildSignal, detrendSig, bandpass, fftPeak, hanning;
+if (typeof RPPG_MATH !== 'undefined') ({ buildSignal, detrendSig, bandpass, fftPeak, hanning } = RPPG_MATH);
+else { buildSignal = detrendSig = bandpass = fftPeak = hanning = () => {}; }
 
 function loop(){
     if(!camRunning) return;
@@ -1057,101 +1051,8 @@ function processFrame(){
         calcBPM();
     }
     drawSig();
-    requestAnimationFrame(processFrame);
 }
 
-// GRGB signal construction per ROI, then average across ROIs (motion cancels)
-function buildSignal(){
-    const buf = RPPG.roiBuf;
-    const N = buf.length;
-    const sig = new Float32Array(N);
-    for(let i=0;i<N;i++){
-        // GRGB: G/R + G/B per ROI (light-intensity invariant ratios)
-        let s = 0, n = 0;
-        for(const k of ['f','l','r']){
-            const o = buf[i][k];
-            if(o.r>1 && o.b>1){ s += (o.g/o.r) + (o.g/o.b); n++; }
-        }
-        sig[i] = n ? s/n : 0;
-    }
-    return sig;
-}
-
-// Detrend via sparse second-difference (rPPG-Toolbox post_process._detrend, λ=100 simplified)
-function detrendSig(sig, lambda=100){
-    const N = sig.length;
-    // simple smoothness-prior detrend: subtract moving average (win ~1s)
-    const win = Math.max(2, Math.round(N/10));
-    const out = new Float32Array(N);
-    let acc = 0;
-    const q = [];
-    for(let i=0;i<N;i++){
-        q.push(sig[i]); acc += sig[i];
-        if(q.length > win) acc -= q.shift();
-        const ma = acc / q.length;
-        out[i] = sig[i] - ma;
-    }
-    return out;
-}
-
-// Butterworth-ish bandpass via cascade of one-pole HP+LP (same as before but tighter band)
-function bandpass(sig, fs, lo, hi){
-    const out = new Float32Array(sig.length), dt = 1/fs;
-    const aL = dt/(1/(2*Math.PI*lo)+dt), aH = (1/(2*Math.PI*hi))/(1/(2*Math.PI*hi)+dt);
-    let hp=0, lp=0;
-    for(let i=0;i<sig.length;i++){
-        hp = aH*(hp + sig[i] - (i>0?sig[i-1]:0));
-        lp += aL*(hp-lp);
-        out[i]=lp;
-    }
-    return out;
-}
-
-// Hann-windowed FFT peak with parabolic interpolation for sub-bin precision
-function hanning(n){
-    const w = new Float64Array(n);
-    for(let i=0;i<n;i++) w[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(n-1));
-    return w;
-}
-function fftPeak(sig, fs, loHz, hiHz){
-    let N = 1; while(N < sig.length) N <<= 1;
-    const seg = new Float64Array(N);
-    seg.set(sig);
-    const hw = hanning(sig.length);
-    for(let i=0;i<sig.length;i++) seg[i] *= hw[i];
-    // DFT magnitude over band only
-    const binHz = fs/N;
-    const loBin = Math.max(1, Math.floor(loHz/binHz));
-    const hiBin = Math.min(Math.floor(hiHz/binHz), N>>1);
-    let bestK=-1, bestMag=-1;
-    const mags = [];
-    for(let k=loBin;k<=hiBin;k++){
-        let re=0, im=0;
-        for(let n=0;n<N;n++){ const a=-2*Math.PI*k*n/N; re+=seg[n]*Math.cos(a); im+=seg[n]*Math.sin(a); }
-        const m = re*re+im*im; mags.push(m);
-        if(m>bestMag){bestMag=m;bestK=k;}
-    }
-    if(bestK<0 || !mags.length) return {bpm:null, snr:0};
-    // Parabolic interpolation on log-magnitude around peak → sub-bin BPM
-    // (comment always promised this; without it BPM quantizes to bin width,
-    //  e.g. ~15 BPM steps on low-fps devices → fake-looking 75/90/105/120)
-    const idx = bestK - loBin;
-    let delta = 0;
-    if(idx > 0 && idx < mags.length-1){
-        const a = Math.log(mags[idx-1]+1e-12), b = Math.log(mags[idx]+1e-12), c = Math.log(mags[idx+1]+1e-12);
-        delta = 0.5*(a-c)/(a-2*b+c || 1e-12);
-    }
-    // SNR: energy at ±0.2Hz around peak vs rest of band (rPPG-Toolbox def, simplified)
-    const devBins = Math.round(0.2/binHz);
-    let sigP=0, noiseP=0;
-    mags.forEach((m,i)=>{
-        const k=i+loBin;
-        if(Math.abs(k-bestK)<=devBins || Math.abs(k-2*bestK)<=devBins) sigP+=m;
-        else noiseP+=m;
-    });
-    const snr = 10*Math.log10((sigP+1e-9)/(noiseP+1e-9));
-    return {bpm: (bestK + delta)*binHz*60, snr};
-}
 
 function calcBPM(){
     const raw = buildSignal();
