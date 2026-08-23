@@ -1,5 +1,5 @@
 // Pressure Relief Service Worker
-const CACHE = 'pr-v2';
+const CACHE = 'pr-v3';
 const ASSETS = [
     './',
     './index.html',
