@@ -829,7 +829,7 @@
             <p>🧘 釋放壓力空間 — 本應用僅供放鬆與參考，不具醫療診斷效力</p>
             <p>心跳偵測採用 rPPG 技術原理，血壓偵測因準確度限制暫未實作</p>
             <p style="margin-top:8px;font-size:0.65rem;opacity:0.5;">如有健康疑慮請諮詢專業醫療人員。本工具不能替代醫生、心理諮商師或任何合格專業人士的建議。</p>
-            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v6 2026-08-23</span></p>
+            <p style="margin-top:6px;font-size:0.65rem;opacity:0.5;">版本 <span id="appVersion">v7 2026-08-23</span></p>
             <div style="margin-top:16px;">
                 <a href="https://ko-fi.com/forumdata" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;background:rgba(125,211,192,0.1);border:1px solid rgba(125,211,192,0.2);color:var(--primary);text-decoration:none;font-size:0.75rem;transition:all 0.2s;">
                     ☕ 請我飲咖啡
@@ -938,6 +938,20 @@ const camCtx = camCanvas.getContext('2d', { willReadFrequently: true });
 const sigCanvas = document.getElementById('signalGraph');
 const sigCtx = sigCanvas.getContext('2d');
 let camRunning = false, camStream = null, frameCnt = 0;
+// object-fit:cover transform: video frame → canvas crop params (set every processFrame)
+let coverT = null;
+function coverRect(){
+    const vw = video.videoWidth || camCanvas.width, vh = video.videoHeight || camCanvas.height;
+    const cw = camCanvas.width, ch = camCanvas.height;
+    const scale = Math.max(cw/vw, ch/vh);
+    const sw = cw/scale, sh = ch/scale;
+    return {sx:(vw-sw)/2, sy:(vh-sh)/2, sw, sh, scale, vw, vh};
+}
+// Map a normalized landmark (relative to raw video frame) to canvas px
+function lmXY(lm){
+    const t = coverT;
+    return {x:(lm.x*t.vw - t.sx)*t.scale, y:(lm.y*t.vh - t.sy)*t.scale};
+}
 let faceMeshInstance = null, faceMeshReady = false, latestLandmarks = null;
 
 async function toggleCamera(){ camRunning ? stopCamera() : await startCamera(); }
@@ -1024,8 +1038,7 @@ function _roiMean(data, w, h, ids){
     if(!latestLandmarks) return null;
     for(const idx of ids){
         if(idx >= latestLandmarks.length) continue;
-        const lm = latestLandmarks[idx];
-        const px = Math.floor(lm.x*w), py = Math.floor(lm.y*h);
+        const {x:px, y:py} = lmXY(latestLandmarks[idx]);
         for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
             const sx=px+dx, sy=py+dy;
             if(sx<0||sx>=w||sy<0||sy>=h) continue;
@@ -1038,7 +1051,8 @@ function _roiMean(data, w, h, ids){
 
 function processFrame(){
     if(!camRunning) return;
-    camCtx.drawImage(video, 0, 0, camCanvas.width, camCanvas.height);
+    coverT = coverRect();
+    camCtx.drawImage(video, coverT.sx, coverT.sy, coverT.sw, coverT.sh, 0, 0, camCanvas.width, camCanvas.height);
 
     if(faceMeshReady && faceMeshInstance){
         try{ faceMeshInstance.send({image: video}); }catch(e){}
@@ -1076,7 +1090,8 @@ function processFrame(){
         // Blur face region (ellipse around landmarks)
         let minX=w, minY=h, maxX=0, maxY=0;
         for(const lm of latestLandmarks){
-            const px=lm.x*w, py=lm.y*h;
+            const p = lmXY(lm);
+            const px=p.x, py=p.y;
             if(px<minX) minX=px; if(py<minY) minY=py;
             if(px>maxX) maxX=px; if(py>maxY) maxY=py;
         }
@@ -1103,7 +1118,8 @@ function processFrame(){
         // Cat ears at top-left and top-right of head (landmarks 234, 454 ≈ ear tops)
         const earSize = Math.min(w,h)*0.18;
         const drawEar = (lm, flip) => {
-            const ex = lm.x*w, ey = lm.y*h - earSize*0.6;
+            const p = lmXY(lm);
+            const ex = p.x, ey = p.y - earSize*0.6;
             camCtx.save();
             camCtx.translate(ex, ey);
             if(flip) camCtx.scale(-1,1);
